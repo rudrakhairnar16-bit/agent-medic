@@ -6,8 +6,8 @@ from mcp.response_parser import parser
 from mcp.queries import QUERY_TEMPLATES
 from llm.engine import ollama_client
 from fix.executor import executor
-from logging.incident_logger import incident_logger
-from logging.metrics_collector import metrics_collector
+from incidents.incident_logger import incident_logger
+from incidents.metrics_collector import metrics_collector
 from db.models import Incident, SessionLocal, IncidentStatus
 from config import config
 
