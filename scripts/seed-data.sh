@@ -1,0 +1,10 @@
+#!/bin/bash
+echo "Seeding sample data..."
+echo "Trigger 4 bug scenarios on sample-app:"
+echo ""
+echo "1. Redis crash:  docker stop $(docker compose ps -q redis)"
+echo "2. CPU spike:    curl http://localhost:8001/trigger/high-cpu"
+echo "3. DB timeout:   curl http://localhost:8001/trigger/db-timeout"
+echo "4. Random 500s:  curl http://localhost:8001/trigger/random-500"
+echo ""
+echo "Check agent dashboard: http://localhost:3000"
