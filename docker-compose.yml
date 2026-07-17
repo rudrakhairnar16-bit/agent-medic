@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   agent-medic:
-    build: ./agent-medic
+    build: ./agent_medic
     ports: ["8000:8000"]
     environment:
       SIGNOZ_MCP_ENABLED: "true"
