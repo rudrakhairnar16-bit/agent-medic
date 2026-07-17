@@ -50,7 +50,6 @@ services:
     build: ./agent_medic
     ports: ["8000:8000"]
     environment:
-      SIGNOZ_MCP_ENABLED: "true"
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: llama3.2
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agent_medic

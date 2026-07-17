@@ -44,7 +44,7 @@ class DockerClient:
 
     def scale(self, name, replicas=3):
         try:
-            r = subprocess.run(["docker","compose","up","-d","--scale",f"{name}={replicas}","--no-recreate"], capture_output=True, text=True, timeout=60)
+            r = subprocess.run(["docker","compose","-f",config.COMPOSE_FILE,"up","-d","--scale",f"{name}={replicas}","--no-recreate"], capture_output=True, text=True, timeout=60)
             return {"status":"success" if r.returncode==0 else "error","message":f"Scaled {name} to {replicas}" if r.returncode==0 else r.stderr}
         except subprocess.TimeoutExpired: return {"status":"error","message":"Timeout"}
 

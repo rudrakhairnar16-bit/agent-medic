@@ -60,26 +60,25 @@ class PipelineWorker:
                 self._escalate(iid, diag, retry)
 
     def _collect(self, alert):
-        if config.DEMO_MODE:
-            from simulated.data import simulated_data
-            d = simulated_data.get_data(alert.get("scenario", "redis_crash"))
-            return d["traces"], d["metrics"], d["logs"]
         d = self.deps
+        if config.DEMO_MODE:
+            scenario = alert.get("scenario", "redis_crash")
+            d["mcp"].set_scenario(scenario)
         try:
             svc = alert.get("labels", {}).get("service_name", "sample-app")
             tr = "now-5m"
             mcp = d["mcp"]
-            parser = d["mcp_parser"]
-            mt = d["metrics"]
+            parser = d.get("mcp_parser")
+            mt = d.get("metrics")
             r = mcp.query_traces(svc, tr)
-            traces = parser.parse_traces(r) if not parser.has_error(r) else []
-            mt.increment("mcp_queries")
+            traces = parser.parse_traces(r) if parser and not parser.has_error(r) else r.get("result", []) if isinstance(r, dict) else []
+            if mt: mt.increment("mcp_queries")
             mr = mcp.query_metrics(f'avg(system_cpu_utilization{{service="{svc}"}})', tr)
-            metrics = parser.parse_metrics(mr) if not parser.has_error(mr) else []
-            mt.increment("mcp_queries")
+            metrics = parser.parse_metrics(mr) if parser and not parser.has_error(mr) else mr.get("result", []) if isinstance(mr, dict) else []
+            if mt: mt.increment("mcp_queries")
             lr = mcp.query_logs(svc, tr)
-            logs = parser.parse_logs(lr) if not parser.has_error(lr) else []
-            mt.increment("mcp_queries")
+            logs = parser.parse_logs(lr) if parser and not parser.has_error(lr) else lr.get("result", []) if isinstance(lr, dict) else []
+            if mt: mt.increment("mcp_queries")
             return traces, metrics, logs
         except Exception as e:
             logger.warning("Telemetry collection failed: %s", e)

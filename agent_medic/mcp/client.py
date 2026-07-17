@@ -1,4 +1,4 @@
-import json, uuid, httpx, logging
+import httpx, logging
 from config import config
 
 logger = logging.getLogger(__name__)

@@ -14,6 +14,7 @@ class Config:
     OLLAMA_TIMEOUT = _int("OLLAMA_TIMEOUT", 60)
     DATABASE_URL = _env("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/agent_medic")
     DOCKER_HOST = _env("DOCKER_HOST", "")
+    COMPOSE_FILE = _env("COMPOSE_FILE", "./docker-compose.yml")
     SLACK_WEBHOOK_URL = _env("SLACK_WEBHOOK_URL")
     DEMO_MODE = _bool("DEMO_MODE")
     LOG_LEVEL = _env("LOG_LEVEL", "INFO")
