@@ -61,11 +61,21 @@ docker_client = DockerClient()
 class HealthVerifier:
     def verify(self, action, params):
         if action == "restart_container":
-            try: return docker.from_env().containers.get(params.get("service_name","")).status == "running"
-            except: return False
+            c = docker_client.client
+            if not c: return False
+            try:
+                return c.containers.get(params.get("service_name", "")).status == "running"
+            except NotFound:
+                return False
+            except Exception as e:
+                logger.warning("Health check failed: %s", e)
+                return False
         if action == "scale_service":
-            try: return httpx.post(f"{config.SIGNOZ_API_URL}/api/v1/query", json={"query":"sum(rate(signoz_latency_count{status_code=~'5..'}[5m]))"}, timeout=10).status_code == 200
-            except: return True
+            try:
+                r = httpx.get(f"http://{params.get('service_name', 'localhost')}:8000/health", timeout=5)
+                return r.status_code == 200
+            except Exception:
+                return False
         return True
 
 class FixExecutor:

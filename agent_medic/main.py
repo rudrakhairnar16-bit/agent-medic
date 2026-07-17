@@ -31,7 +31,7 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    pipeline_worker.stop()
+    await pipeline_worker.stop()
     logger.info("Stopped")
 
 if __name__ == "__main__":

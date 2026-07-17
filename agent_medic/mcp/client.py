@@ -1,4 +1,5 @@
 import json, uuid, httpx, logging
+from config import config
 
 logger = logging.getLogger(__name__)
 
@@ -6,8 +7,8 @@ logger = logging.getLogger(__name__)
 class SigNozAPI:
     """HTTP client for SigNoz Foundry's REST API."""
 
-    def __init__(self, base_url="http://localhost:3301"):
-        self.base_url = base_url
+    def __init__(self, base_url=""):
+        self.base_url = base_url or config.SIGNOZ_API_URL
         self._http = httpx.Client(timeout=30)
 
     def _post(self, path, body):
@@ -41,7 +42,7 @@ class SigNozAPI:
         return self._post("/api/v1/services", {})
 
 
-signoz_api = SigNozAPI()
+signoz_api = SigNozAPI(base_url=config.SIGNOZ_API_URL)
 
 # Alias for backward compatibility with worker.py
 mcp_client = signoz_api
@@ -66,15 +67,3 @@ QUERY_TEMPLATES = {
     "error_logs": {"tool": "query_logs", "args_template": {"svc": "{service}", "time_range": "{time_range}"}},
     "redis_metrics": {"tool": "query_metrics", "args_template": {"q": "rate(redis_errors_total{service='{service}'}[5m])", "time_range": "{time_range}"}},
 }
-
-class MCPResponseParser:
-    @staticmethod
-    def parse_traces(r): return r.get("result", []) if isinstance(r.get("result"), list) else []
-    @staticmethod
-    def parse_metrics(r): return r.get("result", []) if isinstance(r.get("result"), list) else []
-    @staticmethod
-    def parse_logs(r): return r.get("result", []) if isinstance(r.get("result"), list) else []
-    @staticmethod
-    def has_error(r): return "error" in r or "Error" in str(r)
-
-parser = MCPResponseParser()

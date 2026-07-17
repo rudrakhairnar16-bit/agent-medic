@@ -14,7 +14,7 @@ _instruments = {}
 
 def init_otel():
     global _tracer, _instruments
-    if config.is_demo: return
+    if config.DEMO_MODE: return
     resource = Resource.create({"service.name": config.OTEL_SERVICE_NAME, "service.version": "3.1.0"})
     tp = TracerProvider(resource=resource)
     tp.add_span_processor(trace_export.BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{config.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces")))

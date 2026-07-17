@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
+from api.schemas import AlertWebhook
 from pipeline.queue import incident_queue, deduplicator, rate_limiter, correlator
 from db.models import Incident, SessionLocal
 from incidents.metrics_collector import metrics_collector
@@ -6,19 +7,19 @@ from incidents.metrics_collector import metrics_collector
 alert_router = APIRouter()
 
 @alert_router.post("/webhook")
-async def handle_alert(req: Request):
-    body = await req.json()
-    aid = body.get("alert_id")
+async def handle_alert(body: AlertWebhook):
+    raw = body.model_dump() if hasattr(body, "model_dump") else body
+    aid = raw.get("alert_id")
     if deduplicator.is_duplicate(aid): return {"status": "duplicate"}
     if not rate_limiter.allow(): return {"status": "rate_limited"}
-    correlator.push(body)
+    correlator.push(raw)
     db = SessionLocal()
     try:
-        inc = Incident(alert_id=aid, alert_name=body.get("alert_name","unknown"), severity=body.get("severity","info"),
-                       message=body.get("annotations",{}).get("summary",""), telemetry_data=body)
+        inc = Incident(alert_id=aid, alert_name=raw.get("alert_name","unknown"), severity=raw.get("severity","info"),
+                       message=(raw.get("annotations") or {}).get("summary",""), telemetry_data=raw)
         db.add(inc); db.commit()
         metrics_collector.increment("incidents_total")
-        await incident_queue.enqueue({"incident_id": str(inc.id), "alert_id": aid, "body": body})
+        await incident_queue.enqueue({"incident_id": str(inc.id), "alert_id": aid, "body": raw})
         return {"status": "accepted", "incident_id": str(inc.id)}
     except Exception as e: db.rollback(); return {"status": "error", "message": str(e)}
     finally: db.close()

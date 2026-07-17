@@ -46,7 +46,7 @@ class TestChaos:
         assert worker.running is False
         worker.running = True
         assert worker.running is True
-        worker.stop()
+        asyncio.run(worker.stop())
         assert worker.running is False
 
     @pytest.mark.chaos

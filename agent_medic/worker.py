@@ -30,12 +30,12 @@ class PipelineWorker:
         self.running = True
         logger.info("Starting %s workers (demo=%s)", self.n, config.DEMO_MODE)
         self._tasks = [asyncio.create_task(self._loop(i)) for i in range(self.n)]
-        await asyncio.gather(*self._tasks)
 
-    def stop(self):
+    async def stop(self):
         self.running = False
         for t in self._tasks:
             t.cancel()
+        await asyncio.gather(*self._tasks, return_exceptions=True)
 
     async def _loop(self, wid):
         while self.running:

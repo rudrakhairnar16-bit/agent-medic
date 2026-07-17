@@ -8,8 +8,6 @@ def _int(key, default): return int(os.getenv(key, str(default)))
 def _bool(key): return os.getenv(key, "false").lower() == "true"
 
 class Config:
-    SIGNOZ_MCP_ENABLED = _bool("SIGNOZ_MCP_ENABLED")
-    SIGNOZ_MCP_TRANSPORT = _env("SIGNOZ_MCP_TRANSPORT", "stdio")
     SIGNOZ_API_URL = _env("SIGNOZ_API_URL", "http://localhost:3301")
     OLLAMA_BASE_URL = _env("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL = _env("OLLAMA_MODEL", "llama3.2")

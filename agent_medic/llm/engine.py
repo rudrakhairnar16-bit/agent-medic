@@ -23,11 +23,35 @@ def _parse_llm(text):
 
 class RuleBasedFallback:
     @staticmethod
-    def diagnose(alert, metrics):
-        cpu = any(m.get("value",0)>80 for m in metrics if "cpu" in str(m.get("query","")).lower())
-        redis = any(m.get("value",0)>0 for m in metrics if "redis" in str(m.get("query","")).lower())
-        if cpu: return {"root_cause":"CPU overload (rule)","severity":alert.get("severity","warning"),"confidence":0.7,"suggested_fix":"scale_service","fix_params":{"service_name":"sample-app","replicas":3}}
-        if redis: return {"root_cause":"Redis errors (rule)","severity":"critical","confidence":0.8,"suggested_fix":"restart_container","fix_params":{"service_name":"redis"}}
+    def diagnose(alert, metrics, logs=None):
+        logs = logs or []
+        for m in metrics:
+            q = str(m.get("query", "")).lower()
+            v = m.get("value", 0)
+            if "redis" in q and v > 0:
+                return {"root_cause":"Redis errors (rule)","severity":"critical","confidence":0.8,"suggested_fix":"restart_container","fix_params":{"service_name":"redis"}}
+            if "cpu" in q and v > 80:
+                return {"root_cause":"CPU overload (rule)","severity":"warning","confidence":0.7,"suggested_fix":"scale_service","fix_params":{"service_name":"sample-app","replicas":3}}
+            if "memory" in q and v > 95:
+                return {"root_cause":"Memory exhaustion (rule)","severity":"critical","confidence":0.85,"suggested_fix":"restart_container","fix_params":{"service_name":"sample-app"}}
+            if "disk" in q and v > 90:
+                return {"root_cause":"Disk full (rule)","severity":"critical","confidence":0.9,"suggested_fix":"clear_cache","fix_params":{"cache_type":"redis"}}
+            if "oom" in q or "memory_leak" in q and v > 0:
+                return {"root_cause":"OOM or memory leak (rule)","severity":"critical","confidence":0.85,"suggested_fix":"restart_container","fix_params":{"service_name":"sample-app"}}
+            if "error_rate" in q and v > 50:
+                return {"root_cause":"High error rate (rule)","severity":"critical","confidence":0.7,"suggested_fix":"escalate","fix_params":{}}
+            if "tls" in q or "ssl" in q or "cert" in q and v > 0:
+                return {"root_cause":"TLS/certificate failure (rule)","severity":"critical","confidence":0.8,"suggested_fix":"escalate","fix_params":{}}
+            if "network" in q and v > 0:
+                return {"root_cause":"Network failure (rule)","severity":"critical","confidence":0.75,"suggested_fix":"restart_container","fix_params":{"service_name":"sample-app"}}
+            if "db_connections" in q and v == 0:
+                return {"root_cause":"Database unavailable (rule)","severity":"critical","confidence":0.85,"suggested_fix":"restart_container","fix_params":{"service_name":"postgres"}}
+        for l in logs:
+            body = str(l.get("body", "")).lower()
+            if "tls" in body or "cert" in body or "ssl" in body:
+                return {"root_cause":"TLS/certificate failure (rule)","severity":"critical","confidence":0.8,"suggested_fix":"escalate","fix_params":{}}
+            if "oom" in body or "memory" in body:
+                return {"root_cause":"OOM/memory exhaustion (rule)","severity":"critical","confidence":0.85,"suggested_fix":"restart_container","fix_params":{"service_name":"sample-app"}}
         return {"root_cause":"Unknown (fallback)","severity":"warning","confidence":0.3,"suggested_fix":"escalate","fix_params":{}}
 
 class OllamaClient:
@@ -43,8 +67,8 @@ class OllamaClient:
             resp = httpx.post(f"{self.base_url}/api/generate",
                               json={"model": self.model, "prompt": prompt, "stream": False, "temperature": 0, "max_tokens": 2048},
                               timeout=self.timeout)
-            return _parse_llm(resp.json().get("response","")) if resp.status_code == 200 else self.fallback.diagnose(alert, metrics)
+            return _parse_llm(resp.json().get("response","")) if resp.status_code == 200 else self.fallback.diagnose(alert, metrics, logs)
         except Exception:
-            return self.fallback.diagnose(alert, metrics)
+            return self.fallback.diagnose(alert, metrics, logs)
 
 ollama_client = OllamaClient()
