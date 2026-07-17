@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Agent MedIC",
-    version="3.0.0",
+    version="3.1.0",
     description="Self-Healing AI SRE Agent powered by SigNoz MCP",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -64,12 +64,21 @@ async def startup():
         for err in errors:
             logger.warning(f"Config issue: {err}")
 
+    if config.OTEL_ENABLED and not config.is_demo:
+        try:
+            from otel import init_otel
+            init_otel()
+            logger.info("OpenTelemetry initialized — exporting to SigNoz")
+        except Exception as e:
+            logger.warning(f"OpenTelemetry init failed (non-fatal): {e}")
+
     asyncio.create_task(pipeline_worker.start())
 
     mode = "DEMO" if config.is_demo else "PRODUCTION"
-    logger.info(f"Agent MedIC v3.0.0 started — {mode} mode, "
+    logger.info(f"Agent MedIC v3.1.0 started — {mode} mode, "
                 f"{config.AGENT_WORKERS} workers, "
-                f"Ollama: {config.OLLAMA_MODEL}")
+                f"Ollama: {config.OLLAMA_MODEL}, "
+                f"OTel: {config.OTEL_ENABLED and not config.is_demo}")
 
 
 @app.on_event("shutdown")

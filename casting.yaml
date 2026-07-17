@@ -1,6 +1,10 @@
 version: "1.0"
 name: agent-medic
 
+mcp:
+  spec:
+    enabled: true
+
 services:
   signoz:
     image: signoz/foundry:latest
@@ -34,31 +38,75 @@ alerts:
     severity: warning
     webhook: http://agent-medic:8000/webhook
 
+  - name: High Disk Usage
+    query: avg(disk_usage_percent) > 0.90
+    severity: warning
+    webhook: http://agent-medic:8000/webhook
+
+  - name: High Error Rate (Agent)
+    query: sum(rate(agent_incidents_total{status="failed"}[5m])) > 2
+    severity: warning
+    webhook: http://agent-medic:8000/webhook
+
 dashboards:
-  - name: Agent MedIC Overview
+  - name: Agent MedIC — Pipeline Performance
     panels:
-      - title: Incidents Over Time
+      - title: Incidents Processed
         type: timeseries
-        query: count(incidents) by status
+        query: sum(rate(agent_incidents_total[5m]))
 
-      - title: Auto-Fix Success Rate
+      - title: Fix Success Rate
         type: stat
-        query: sum(success)/total * 100
+        query: sum(agent_fix_successes) / sum(agent_fix_attempts) * 100
 
-      - title: Average Resolution Time
+      - title: Pipeline Stage Latency (p95)
+        type: timeseries
+        query: p95(agent_pipeline_duration_ms)
+
+      - title: LLM Calls
+        type: timeseries
+        query: sum(rate(agent_llm_calls[5m]))
+
+      - title: Queue Depth
+        type: timeseries
+        query: avg(agent_queue_depth)
+
+      - title: Incident Resolution Rate
         type: stat
-        query: avg(resolution_time_ms)
+        query: sum(incidents_resolved) / sum(incidents_total) * 100
 
-  - name: Service Health
+  - name: Agent MedIC — Service Health
     panels:
-      - title: Error Rate
+      - title: Error Rate by Service
         type: timeseries
-        query: rate(error_count[5m])
+        query: rate(error_count[5m]) by (service_name)
 
-      - title: P95 Latency
+      - title: P95 Latency by Service
         type: timeseries
-        query: p95(duration_ms)
+        query: p95(duration_ms) by (service_name)
 
-      - title: CPU Usage
+      - title: CPU Usage by Service
         type: timeseries
-        query: avg(cpu_utilization)
+        query: avg(cpu_utilization) by (service_name)
+
+      - title: Memory Usage by Service
+        type: timeseries
+        query: avg(memory_usage) by (service_name)
+
+      - title: Service Health Score
+        type: stat
+        query: (1 - sum(failed_requests) / sum(total_requests)) * 100
+
+  - name: Agent MedIC — Alert Correlation
+    panels:
+      - title: Alert Correlation Groups
+        type: table
+        query: count(correlation_groups) by (root_cause)
+
+      - title: Time Between Correlated Alerts
+        type: timeseries
+        query: avg(inter_alert_delay_seconds)
+
+      - title: Top Root Causes
+        type: table
+        query: count(incidents) by (root_cause) | order by count desc

@@ -30,6 +30,10 @@ class Config:
     AGENT_MAX_RETRIES: int = int(os.getenv("AGENT_MAX_RETRIES", "3"))
     AGENT_ESCALATION_TIMEOUT_MINUTES: int = int(os.getenv("AGENT_ESCALATION_TIMEOUT_MINUTES", "10"))
 
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+    OTEL_SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "agent-medic")
+    OTEL_ENABLED: bool = os.getenv("OTEL_ENABLED", "true").lower() == "true"
+
     @property
     def is_demo(self) -> bool:
         return self.DEMO_MODE

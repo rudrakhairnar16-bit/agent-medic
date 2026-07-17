@@ -99,8 +99,15 @@ class TestDemoMode:
     def test_simulated_data_all_scenarios_loadable(self):
         from simulated.data import simulated_data
         names = simulated_data.get_scenario_names()
-        assert len(names) == 4
+        assert len(names) >= 10
         assert "redis_crash" in names
         assert "cpu_spike" in names
         assert "db_timeout" in names
         assert "random_500s" in names
+        assert "network_partition" in names
+        assert "disk_full" in names
+        assert "memory_leak" in names
+        assert "slow_queries" in names
+        assert "tls_cert_expiry" in names
+        assert "oom_kill" in names
+        assert "cascading_failure" in names

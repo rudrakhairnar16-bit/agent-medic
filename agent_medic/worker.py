@@ -4,6 +4,10 @@ from pipeline.queue import incident_queue
 from db.models import SessionLocal
 from incidents.metrics_collector import metrics_collector
 from config import config
+from otel import (
+    trace_pipeline_stage, record_incident, record_fix_attempt,
+    record_fix_success, record_llm_call, record_queue_depth
+)
 import time
 
 logger = logging.getLogger(__name__)
@@ -67,6 +71,7 @@ class PipelineWorker:
                 incident_data = await asyncio.wait_for(
                     incident_queue.dequeue(), timeout=1.0
                 )
+                record_queue_depth(incident_queue.qsize())
                 await self._process_incident(worker_id, incident_data)
             except asyncio.TimeoutError:
                 continue
@@ -78,21 +83,26 @@ class PipelineWorker:
         alert = incident_data.get("body", {})
         retry_count = incident_data.get("retry_count", 0)
 
-        logger.info(f"Worker {worker_id} processing incident {incident_id} "
-                    f"(retry {retry_count}/{self.MAX_RETRIES})")
+        attrs = {"incident_id": incident_id[:8], "worker_id": str(worker_id), "retry_count": str(retry_count)}
 
-        traces, metrics, logs = self._collect_telemetry(alert)
+        with trace_pipeline_stage("full_pipeline", attrs):
+            logger.info(f"Worker {worker_id} processing incident {incident_id} "
+                        f"(retry {retry_count}/{self.MAX_RETRIES})")
 
-        diagnosis = self._run_diagnosis(alert, traces, metrics, logs, retry_count)
+            with trace_pipeline_stage("collect_telemetry", attrs):
+                traces, metrics_data, logs = self._collect_telemetry(alert)
 
-        if diagnosis.get("suggested_fix") != "escalate" and diagnosis.get("fix_params"):
-            await self._attempt_fix(incident_id, diagnosis, retry_count)
-        else:
-            self._handle_escalation(incident_id, diagnosis, retry_count)
+            with trace_pipeline_stage("run_diagnosis", attrs):
+                diagnosis = self._run_diagnosis(alert, traces, metrics_data, logs, retry_count)
+
+            if diagnosis.get("suggested_fix") != "escalate" and diagnosis.get("fix_params"):
+                await self._attempt_fix(incident_id, diagnosis, retry_count)
+            else:
+                self._handle_escalation(incident_id, diagnosis, retry_count)
 
     def _collect_telemetry(self, alert: dict):
         traces = []
-        metrics = []
+        metrics_data = []
         logs = []
         d = self.deps
 
@@ -125,7 +135,7 @@ class PipelineWorker:
                 time_range
             )
             if not d["mcp_parser"].has_error(mcp_metrics):
-                metrics = d["mcp_parser"].parse_metrics(mcp_metrics)
+                metrics_data = d["mcp_parser"].parse_metrics(mcp_metrics)
             d["metrics"].increment("mcp_queries")
 
             mcp_logs = d["mcp"].query_logs(service, time_range)
@@ -136,18 +146,20 @@ class PipelineWorker:
         except Exception as e:
             logger.warning(f"Telemetry collection failed: {e}")
 
-        return traces, metrics, logs
+        return traces, metrics_data, logs
 
-    def _run_diagnosis(self, alert: dict, traces: list, metrics: list,
+    def _run_diagnosis(self, alert: dict, traces: list, metrics_data: list,
                        logs: list, retry_count: int) -> dict:
         d = self.deps
         try:
             d["metrics"].increment("llm_calls")
-            diagnosis = d["llm"].diagnose(alert, traces, metrics, logs)
+            diagnosis = d["llm"].diagnose(alert, traces, metrics_data, logs)
+            record_llm_call(alert.get("incident_id", "unknown"), config.OLLAMA_MODEL, True)
         except Exception as e:
             logger.warning(f"LLM diagnosis failed: {e}")
             diagnosis = {"root_cause": "Diagnosis failed", "confidence": 0.0,
                          "suggested_fix": "escalate", "fix_params": {}}
+            record_llm_call(alert.get("incident_id", "unknown"), config.OLLAMA_MODEL, False)
 
         if retry_count > 0 and diagnosis.get("confidence", 0) < 0.5:
             diagnosis["suggested_fix"] = "escalate"
@@ -162,10 +174,13 @@ class PipelineWorker:
 
         try:
             d["metrics"].increment("fix_attempts")
+            record_fix_attempt(incident_id, suggested_fix)
             fix_result = await d["fix"].execute(suggested_fix, fix_params)
 
             if fix_result.get("verified"):
                 d["metrics"].increment("fix_successes")
+                record_fix_success(incident_id, suggested_fix)
+                record_incident(incident_id, suggested_fix, "resolved")
                 d["logger"].log_resolved(incident_id, diagnosis, fix_result)
                 logger.info(f"Fix succeeded: {suggested_fix} on {incident_id}")
             elif retry_count < self.MAX_RETRIES:
@@ -176,6 +191,7 @@ class PipelineWorker:
                     "retry_count": retry_count + 1
                 })
             else:
+                record_incident(incident_id, suggested_fix, "failed")
                 d["logger"].log_failed(incident_id,
                     fix_result.get("message", "Fix not verified after max retries"))
                 logger.warning(f"Fix failed for {incident_id} after {self.MAX_RETRIES} retries")
@@ -189,12 +205,14 @@ class PipelineWorker:
                     "retry_count": retry_count + 1
                 })
             else:
+                record_incident(incident_id, suggested_fix, "failed")
                 d["logger"].log_failed(incident_id, error_msg)
                 logger.error(f"Fix permanently failed for {incident_id}: {error_msg}")
 
     def _handle_escalation(self, incident_id: str, diagnosis: dict, retry_count: int):
         d = self.deps
         if retry_count >= self.MAX_RETRIES:
+            record_incident(incident_id, "escalate", "escalated")
             d["logger"].log_failed(incident_id,
                 f"Escalated: {diagnosis.get('root_cause', 'unknown')} "
                 f"(retried {self.MAX_RETRIES} times)")
