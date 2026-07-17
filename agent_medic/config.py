@@ -17,11 +17,32 @@ class Config:
 
     DOCKER_HOST: str = os.getenv("DOCKER_HOST", "unix:///var/run/docker.sock")
 
+    SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
+
+    DEMO_MODE: bool = os.getenv("DEMO_MODE", "false").lower() == "true"
+
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "json")
 
     AGENT_WORKERS: int = int(os.getenv("AGENT_WORKERS", "3"))
     AGENT_DEDUP_WINDOW_MINUTES: int = int(os.getenv("AGENT_DEDUP_WINDOW_MINUTES", "5"))
     AGENT_RATE_LIMIT_PER_MINUTE: int = int(os.getenv("AGENT_RATE_LIMIT_PER_MINUTE", "10"))
+    AGENT_MAX_RETRIES: int = int(os.getenv("AGENT_MAX_RETRIES", "3"))
+    AGENT_ESCALATION_TIMEOUT_MINUTES: int = int(os.getenv("AGENT_ESCALATION_TIMEOUT_MINUTES", "10"))
+
+    @property
+    def is_demo(self) -> bool:
+        return self.DEMO_MODE
+
+    def validate(self):
+        errors = []
+        if not self.DATABASE_URL:
+            errors.append("DATABASE_URL is required")
+        if self.DEMO_MODE:
+            return errors
+        if self.SIGNOZ_MCP_ENABLED and not self.SIGNOZ_API_URL:
+            errors.append("SIGNOZ_API_URL is required when MCP is enabled")
+        return errors
 
 
 config = Config()
