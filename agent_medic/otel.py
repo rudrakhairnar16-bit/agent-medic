@@ -48,6 +48,7 @@ def trace_pipeline_stage(stage: str, attrs: dict = None):
     if not _tracer:
         yield None; return
     start = time.time()
+    max_duration = 300.0
     with _tracer.start_as_current_span(f"pipeline.{stage}", kind=SpanKind.INTERNAL, attributes=attrs or {}) as span:
         try:
             yield span
@@ -59,6 +60,7 @@ def trace_pipeline_stage(stage: str, attrs: dict = None):
         finally:
             ms = (time.time() - start) * 1000
             span.set_attribute("duration_ms", ms)
+            span.set_attribute("timeout", ms > max_duration * 1000)
             _rec_hist("agent.pipeline.duration_ms", ms, stage=stage)
 
 def record_incident(iid, action, status): _rec("agent.incidents.total", incident_id=iid[:8], action=action, status=status)

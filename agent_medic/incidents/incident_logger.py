@@ -1,10 +1,15 @@
 from config import config
 from db.models import SessionLocal, Incident
 from api.websocket import manager
-import httpx, asyncio, logging, json
+import httpx, asyncio, logging, json, sys
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _degraded_incident_update(iid, status, **kw):
+    logger.error("DB unavailable: incident %s status=%s (degraded mode)", iid[:8], status)
+    sys.stderr.write(f"[DEGRADED] incident={iid[:8]} status={status} data={json.dumps(kw)}\n")
 
 
 def _broadcast(msg):
@@ -38,7 +43,14 @@ def _push_signoz(msg):
 
 
 def log_resolved(iid, diagnosis, fix_result):
-    db = SessionLocal()
+    try:
+        db = SessionLocal()
+    except Exception as e:
+        logger.error("DB connection failed (resolved): %s", e)
+        _degraded_incident_update(iid, "resolved", root_cause=diagnosis.get("root_cause",""), fix_action=fix_result.get("action",""))
+        msg = {"incident_id": iid, "status": "resolved", "root_cause": diagnosis.get("root_cause",""), "fix_action": fix_result.get("action","")}
+        _broadcast(msg); _notify_slack("resolved", iid); _push_signoz(msg)
+        return
     try:
         inc = db.query(Incident).filter(Incident.id == iid).first()
         if inc:
@@ -49,21 +61,28 @@ def log_resolved(iid, diagnosis, fix_result):
         else: rt = None
         msg = {"incident_id": iid, "status": "resolved", "root_cause": diagnosis.get("root_cause",""), "fix_action": fix_result.get("action",""), "resolution_time_seconds": rt}
         _broadcast(msg); _notify_slack("resolved", iid); _push_signoz(msg)
-        logger.info(f"Resolved {iid[:8]} in {rt}s")
-    except Exception as e: logger.error(f"Log error: {e}")
+        logger.info("Resolved %s in %ss", iid[:8], rt)
+    except Exception as e: logger.error("Log error: %s", e)
     finally: db.close()
 
 
 def log_failed(iid, error):
-    db = SessionLocal()
+    try:
+        db = SessionLocal()
+    except Exception as e:
+        logger.error("DB connection failed (failed): %s", e)
+        _degraded_incident_update(iid, "failed", error=error[:50])
+        msg = {"incident_id": iid, "status": "failed", "error": error}
+        _broadcast(msg); _notify_slack("failed", iid, error); _push_signoz(msg)
+        return
     try:
         inc = db.query(Incident).filter(Incident.id == iid).first()
         if inc: inc.status = "failed"; db.commit()
         msg = {"incident_id": iid, "status": "failed", "error": error}
         _broadcast(msg); _notify_slack("failed", iid, error); _push_signoz(msg)
-        logger.warning(f"Failed {iid[:8]}: {error[:50]}")
-    except Exception as e: logger.error(f"Log error: {e}")
+        logger.warning("Failed %s: %s", iid[:8], error[:50])
+    except Exception as e: logger.error("Log error: %s", e)
     finally: db.close()
 
 
-incident_logger = type("IL", (), {"log_resolved": log_resolved, "log_failed": log_failed})()
+incident_logger = type("IL", (), {"log_resolved": staticmethod(log_resolved), "log_failed": staticmethod(log_failed)})()

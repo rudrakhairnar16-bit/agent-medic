@@ -44,16 +44,18 @@ class PipelineWorker:
                 record_queue_depth(incident_queue.qsize())
                 await self._process(wid, data)
             except asyncio.TimeoutError: continue
-            except Exception as e: logger.error(f"Worker {wid}: {e}")
+            except Exception as e: logger.error("Worker %s: %s", wid, e)
 
     async def _process(self, wid, data):
         iid, alert, retry = data.get("incident_id"), data.get("body", {}), data.get("retry_count", 0)
         attrs = {"incident_id": iid[:8], "worker_id": str(wid), "retry": str(retry)}
         with trace_pipeline_stage("full_pipeline", attrs):
+            from pipeline.queue import correlator
+            correlation = correlator.correlate()
             with trace_pipeline_stage("collect_telemetry", attrs):
                 traces, mdata, logs = self._collect(alert)
             with trace_pipeline_stage("diagnose", attrs):
-                diag = self._diagnose(alert, traces, mdata, logs, retry)
+                diag = self._diagnose(alert, traces, mdata, logs, retry, correlation)
             if diag.get("suggested_fix") != "escalate" and diag.get("fix_params"):
                 await self._fix(iid, diag, retry)
             else:
@@ -84,18 +86,18 @@ class PipelineWorker:
             logger.warning("Telemetry collection failed: %s", e)
             return [], [], []
 
-    def _diagnose(self, alert, traces, metrics, logs, retry):
+    def _diagnose(self, alert, traces, metrics, logs, retry, correlation=None):
         d = self.deps
         try:
             d["metrics"].increment("llm_calls")
-            diag = d["llm"].diagnose(alert, traces, metrics, logs)
+            diag = d["llm"].diagnose(alert, traces, metrics, logs, correlation)
             record_llm_call(alert.get("incident_id", "x"), config.OLLAMA_MODEL, True)
             if retry > 0 and diag.get("confidence", 0) < 0.5:
                 diag["suggested_fix"] = "escalate"
                 diag["root_cause"] += " (low confidence)"
             return diag
         except Exception as e:
-            logger.warning(f"LLM failed: {e}")
+            logger.warning("LLM failed: %s", e)
             record_llm_call(alert.get("incident_id", "x"), config.OLLAMA_MODEL, False)
             return {"root_cause": "Diagnosis failed", "confidence": 0.0, "suggested_fix": "escalate", "fix_params": {}}
 

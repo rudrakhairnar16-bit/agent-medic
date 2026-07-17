@@ -14,7 +14,20 @@ def _db():
 
 @router.get("/health")
 def health():
-    return {"status": "healthy", "version": "3.1.0", "mode": "demo" if config.DEMO_MODE else "production", "uptime": int(time.time() - _start), "workers": config.AGENT_WORKERS, "model": config.OLLAMA_MODEL}
+    from worker import pipeline_worker
+    from pipeline.queue import incident_queue
+    worker_alive = pipeline_worker.running
+    queue_depth = incident_queue.qsize()
+    return {
+        "status": "healthy" if worker_alive else "degraded",
+        "version": "3.1.0",
+        "mode": "demo" if config.DEMO_MODE else "production",
+        "uptime": int(time.time() - _start),
+        "worker_alive": worker_alive,
+        "queue_depth": queue_depth,
+        "workers_configured": config.AGENT_WORKERS,
+        "model": config.OLLAMA_MODEL,
+    }
 
 @router.get("/incidents")
 def list_incidents(page=1, limit=20, db=Depends(_db)):
@@ -42,8 +55,9 @@ def agent_metrics(): return metrics_collector.snapshot()
 @router.post("/demo/trigger")
 async def trigger(scenario="redis_crash"):
     if not config.DEMO_MODE: return {"error": "DEMO_MODE not enabled"}
+    from pipeline.queue import rate_limiter, incident_queue
+    if not rate_limiter.allow(): return {"status": "rate_limited", "error": "Too many requests"}
     from simulated.data import simulated_data
-    from pipeline.queue import incident_queue
     names = simulated_data.get_scenario_names()
     if scenario not in names: return {"error": f"Invalid. Choose: {names}"}
     db = SessionLocal()
