@@ -12,7 +12,7 @@ class TestIntegration:
     def test_worker_init(self):
         from agent_medic.worker import pipeline_worker
         assert pipeline_worker is not None
-        assert pipeline_worker.num_workers == 3
+        assert pipeline_worker.n == 3
 
     @pytest.mark.P0
     def test_ollama_client_init(self):

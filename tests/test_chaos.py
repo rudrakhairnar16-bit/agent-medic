@@ -42,7 +42,7 @@ class TestChaos:
     def test_worker_lifecycle(self):
         from worker import PipelineWorker
         import asyncio
-        worker = PipelineWorker(num_workers=0)
+        worker = PipelineWorker(n=0)
         assert worker.running is False
         worker.running = True
         assert worker.running is True

@@ -1,106 +1,54 @@
 from opentelemetry import trace, metrics
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.trace import TracerProvider, export as trace_export
+from opentelemetry.sdk.metrics import MeterProvider, export as metric_export
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.resources import Resource
-from opentelemetry import context as otel_context
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from contextlib import contextmanager
 from config import config
 import time
 
-
-_SERVICE_NAME = "agent-medic"
 _tracer = None
-_meter = None
-
-_agent_incidents_total = None
-_agent_fix_attempts = None
-_agent_fix_successes = None
-_agent_pipeline_duration = None
-_agent_llm_calls = None
-_agent_queue_depth = None
-
+_instruments = {}
 
 def init_otel():
-    global _tracer, _meter
-    global _agent_incidents_total, _agent_fix_attempts, _agent_fix_successes
-    global _agent_pipeline_duration, _agent_llm_calls, _agent_queue_depth
+    global _tracer, _instruments
+    if config.is_demo: return
+    resource = Resource.create({"service.name": config.OTEL_SERVICE_NAME, "service.version": "3.1.0"})
+    tp = TracerProvider(resource=resource)
+    tp.add_span_processor(trace_export.BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{config.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces")))
+    trace.set_tracer_provider(tp)
+    _tracer = trace.get_tracer(config.OTEL_SERVICE_NAME)
+    reader = metric_export.PeriodicExportingMetricReader(OTLPMetricExporter(endpoint=f"{config.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics"), export_interval_millis=5000)
+    mp = MeterProvider(resource=resource, metric_readers=[reader])
+    metrics.set_meter_provider(mp)
+    meter = metrics.get_meter(config.OTEL_SERVICE_NAME)
+    for name, kind, desc in [
+        ("agent.incidents.total", "counter", "Total incidents"),
+        ("agent.fix.attempts", "counter", "Fix attempts"),
+        ("agent.fix.successes", "counter", "Successful fixes"),
+        ("agent.llm.calls", "counter", "LLM calls"),
+        ("agent.pipeline.duration_ms", "histogram", "Pipeline stage duration ms"),
+        ("agent.queue.depth", "histogram", "Queue depth"),
+    ]:
+        _instruments[name] = (meter.create_counter(name, description=desc) if kind == "counter"
+                              else meter.create_histogram(name, description=desc, unit="ms"))
 
-    if config.is_demo:
-        return
+def _rec(name, **attrs):
+    inst = _instruments.get(name)
+    if inst: inst.add(1, attrs)
 
-    resource = Resource.create({
-        "service.name": _SERVICE_NAME,
-        "service.version": "3.0.0",
-        "deployment.environment": "demo" if config.is_demo else "production"
-    })
-
-    trace_exporter = OTLPSpanExporter(
-        endpoint=f"{config.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces"
-    )
-    tracer_provider = TracerProvider(resource=resource)
-    tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
-    trace.set_tracer_provider(tracer_provider)
-    _tracer = trace.get_tracer(_SERVICE_NAME)
-
-    metric_exporter = OTLPMetricExporter(
-        endpoint=f"{config.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics"
-    )
-    reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=5000)
-    meter_provider = MeterProvider(resource=resource, metric_readers=[reader])
-    metrics.set_meter_provider(meter_provider)
-    _meter = metrics.get_meter(_SERVICE_NAME)
-
-    _agent_incidents_total = _meter.create_counter(
-        "agent.incidents.total",
-        description="Total incidents processed"
-    )
-    _agent_fix_attempts = _meter.create_counter(
-        "agent.fix.attempts",
-        description="Total fix attempts"
-    )
-    _agent_fix_successes = _meter.create_counter(
-        "agent.fix.successes",
-        description="Total successful fixes"
-    )
-    _agent_pipeline_duration = _meter.create_histogram(
-        "agent.pipeline.duration_ms",
-        description="Pipeline stage duration in ms",
-        unit="ms"
-    )
-    _agent_llm_calls = _meter.create_counter(
-        "agent.llm.calls",
-        description="Total LLM diagnosis calls"
-    )
-    _agent_queue_depth = _meter.create_histogram(
-        "agent.queue.depth",
-        description="Current incident queue depth"
-    )
-
-
-def get_tracer():
-    return _tracer
-
-
-def get_meter():
-    return _meter
-
+def _rec_hist(name, val, **attrs):
+    inst = _instruments.get(name)
+    if inst: inst.record(val, attrs)
 
 @contextmanager
-def trace_pipeline_stage(stage_name: str, attributes: dict = None):
-    if _tracer is None:
-        yield None
-        return
+def trace_pipeline_stage(stage: str, attrs: dict = None):
+    if not _tracer:
+        yield None; return
     start = time.time()
-    with _tracer.start_as_current_span(
-        f"pipeline.{stage_name}",
-        kind=SpanKind.INTERNAL,
-        attributes=attributes or {}
-    ) as span:
+    with _tracer.start_as_current_span(f"pipeline.{stage}", kind=SpanKind.INTERNAL, attributes=attrs or {}) as span:
         try:
             yield span
             span.set_status(Status(StatusCode.OK))
@@ -109,49 +57,12 @@ def trace_pipeline_stage(stage_name: str, attributes: dict = None):
             span.record_exception(e)
             raise
         finally:
-            duration = (time.time() - start) * 1000
-            span.set_attribute("duration_ms", duration)
-            if _agent_pipeline_duration:
-                _agent_pipeline_duration.record(
-                    duration,
-                    {"stage": stage_name}
-                )
+            ms = (time.time() - start) * 1000
+            span.set_attribute("duration_ms", ms)
+            _rec_hist("agent.pipeline.duration_ms", ms, stage=stage)
 
-
-def record_incident(incident_id: str, action: str, status: str):
-    if _agent_incidents_total:
-        _agent_incidents_total.add(1, {
-            "incident_id": incident_id[:8],
-            "action": action,
-            "status": status
-        })
-
-
-def record_fix_attempt(incident_id: str, fix_type: str):
-    if _agent_fix_attempts:
-        _agent_fix_attempts.add(1, {
-            "incident_id": incident_id[:8],
-            "fix_type": fix_type
-        })
-
-
-def record_fix_success(incident_id: str, fix_type: str):
-    if _agent_fix_successes:
-        _agent_fix_successes.add(1, {
-            "incident_id": incident_id[:8],
-            "fix_type": fix_type
-        })
-
-
-def record_llm_call(incident_id: str, model: str, success: bool):
-    if _agent_llm_calls:
-        _agent_llm_calls.add(1, {
-            "incident_id": incident_id[:8],
-            "model": model,
-            "success": str(success)
-        })
-
-
-def record_queue_depth(depth: int):
-    if _agent_queue_depth:
-        _agent_queue_depth.record(depth)
+def record_incident(iid, action, status): _rec("agent.incidents.total", incident_id=iid[:8], action=action, status=status)
+def record_fix_attempt(iid, fix_type): _rec("agent.fix.attempts", incident_id=iid[:8], fix_type=fix_type)
+def record_fix_success(iid, fix_type): _rec("agent.fix.successes", incident_id=iid[:8], fix_type=fix_type)
+def record_llm_call(iid, model, ok): _rec("agent.llm.calls", incident_id=iid[:8], model=model, success=str(ok))
+def record_queue_depth(d): _rec_hist("agent.queue.depth", d)

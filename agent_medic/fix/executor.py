@@ -1,42 +1,74 @@
-from fix.actions import validate_action, get_supported_actions
-from fix.docker_client import docker_client
-from fix.health_verifier import HealthVerifier
-import asyncio
+import docker, subprocess, asyncio, httpx
+from docker.errors import NotFound, APIError
+from config import config
 
+ACTIONS = {
+    "restart_container": {"required": ["service_name"], "timeout": 30},
+    "scale_service": {"required": ["service_name", "replicas"], "timeout": 60},
+    "clear_cache": {"required": ["cache_type", "host"], "timeout": 10},
+}
+
+def validate_action(t, params):
+    a = ACTIONS.get(t)
+    return bool(a and all(p in params for p in a["required"]))
+
+class DockerClient:
+    def __init__(self): self._client = None
+    @property
+    def client(self):
+        if self._client is None:
+            try: self._client = docker.from_env()
+            except:
+                try: self._client = docker.DockerClient(base_url=config.DOCKER_HOST)
+                except: self._client = None
+        return self._client
+
+    def restart(self, name, timeout=30):
+        if not self.client: return {"status":"error","message":"Docker unavailable"}
+        try:
+            (self.client.containers.get(name) or self.client.containers.list(filters={"name":name})[0]).restart(timeout=timeout)
+            return {"status":"success","message":f"Restarted {name}"}
+        except (NotFound, IndexError): return {"status":"error","message":f"{name} not found"}
+        except APIError as e: return {"status":"error","message":str(e)}
+
+    def scale(self, name, replicas=3):
+        try:
+            r = subprocess.run(["docker","compose","up","-d","--scale",f"{name}={replicas}","--no-recreate"], capture_output=True, text=True, timeout=60)
+            return {"status":"success" if r.returncode==0 else "error","message":f"Scaled {name} to {replicas}" if r.returncode==0 else r.stderr}
+        except subprocess.TimeoutExpired: return {"status":"error","message":"Timeout"}
+
+    def clear_cache(self, cache_type="redis", host="localhost"):
+        if cache_type != "redis": return {"status":"error","message":f"Unknown: {cache_type}"}
+        try:
+            import redis as r
+            r.Redis(host=host, socket_timeout=5).flushall()
+            return {"status":"success","message":"Cache cleared"}
+        except Exception as e: return {"status":"error","message":str(e)}
+
+docker_client = DockerClient()
+
+class HealthVerifier:
+    def verify(self, action, params):
+        if action == "restart_container":
+            try: return docker.from_env().containers.get(params.get("service_name","")).status == "running"
+            except: return False
+        if action == "scale_service":
+            try: return httpx.post(f"{config.SIGNOZ_API_URL}/api/v1/query", json={"query":"sum(rate(signoz_latency_count{status_code=~'5..'}[5m]))"}, timeout=10).status_code == 200
+            except: return True
+        return True
 
 class FixExecutor:
-    def __init__(self):
-        self.health_verifier = HealthVerifier()
-
-    async def execute(self, action_type: str, params: dict) -> dict:
-        if not validate_action(action_type, params):
-            return {"status": "error", "message": f"Invalid action: {action_type}"}
-
-        if action_type == "restart_container":
-            result = docker_client.restart_container(
-                params["service_name"]
-            )
-        elif action_type == "scale_service":
-            result = docker_client.scale_service(
-                params["service_name"],
-                int(params.get("replicas", 3))
-            )
-        elif action_type == "clear_cache":
-            result = docker_client.clear_cache(
-                params.get("cache_type", "redis"),
-                params.get("host", "localhost")
-            )
-        else:
-            return {"status": "error", "message": f"Unknown action: {action_type}"}
-
+    async def execute(self, action, params):
+        if not validate_action(action, params): return {"status":"error","message":f"Invalid: {action}"}
+        fn = {"restart_container": lambda: docker_client.restart(params["service_name"]),
+              "scale_service": lambda: docker_client.scale(params["service_name"], int(params.get("replicas",3))),
+              "clear_cache": lambda: docker_client.clear_cache(params.get("cache_type","redis"), params.get("host","localhost"))}.get(action)
+        if not fn: return {"status":"error","message":f"Unknown: {action}"}
+        result = fn()
         if result["status"] == "success":
             await asyncio.sleep(3)
-            verified = self.health_verifier.verify(action_type, params)
-            result["verified"] = verified
-        else:
-            result["verified"] = False
-
+            result["verified"] = HealthVerifier().verify(action, params)
+        else: result["verified"] = False
         return result
-
 
 executor = FixExecutor()
