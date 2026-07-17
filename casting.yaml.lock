@@ -1,0 +1,7 @@
+version: "1.0"
+name: agent-medic
+timestamp: "2026-07-17T22:00:00Z"
+checksum: sha256:placeholder
+dependencies:
+  signoz: ">=0.6.0"
+  docker-compose: ">=2.0.0"

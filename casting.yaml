@@ -1,0 +1,64 @@
+version: "1.0"
+name: agent-medic
+
+services:
+  signoz:
+    image: signoz/foundry:latest
+    ports:
+      - 3301:3301
+      - 4318:4318
+      - 4317:4317
+    volumes:
+      - signoz-data:/var/lib/signoz
+    environment:
+      - SIGNOZ_MCP_ENABLED=true
+
+alerts:
+  - name: High Error Rate
+    query: sum(rate(signoz_latency_count{status_code=~"5.."}[5m])) / sum(rate(signoz_latency_count[5m])) > 0.05
+    severity: critical
+    webhook: http://agent-medic:8000/webhook
+
+  - name: High CPU Usage
+    query: avg(system_cpu_utilization) > 0.80
+    severity: warning
+    webhook: http://agent-medic:8000/webhook
+
+  - name: Redis Connection Errors
+    query: rate(redis_errors_total[5m]) > 0
+    severity: critical
+    webhook: http://agent-medic:8000/webhook
+
+  - name: High Memory Usage
+    query: avg(system_memory_utilization) > 0.85
+    severity: warning
+    webhook: http://agent-medic:8000/webhook
+
+dashboards:
+  - name: Agent MedIC Overview
+    panels:
+      - title: Incidents Over Time
+        type: timeseries
+        query: count(incidents) by status
+
+      - title: Auto-Fix Success Rate
+        type: stat
+        query: sum(success)/total * 100
+
+      - title: Average Resolution Time
+        type: stat
+        query: avg(resolution_time_ms)
+
+  - name: Service Health
+    panels:
+      - title: Error Rate
+        type: timeseries
+        query: rate(error_count[5m])
+
+      - title: P95 Latency
+        type: timeseries
+        query: p95(duration_ms)
+
+      - title: CPU Usage
+        type: timeseries
+        query: avg(cpu_utilization)
