@@ -4,19 +4,30 @@ header { background: #1e293b; padding: 1.5rem 2rem; border-bottom: 2px solid #3b
 header h1 { color: #3b82f6; font-size: 1.8rem; }
 .subtitle { color: #94a3b8; font-size: 0.9rem; }
 main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem; }
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 2rem; }
 .stat-card { background: #1e293b; padding: 1.5rem; border-radius: 8px; text-align: center; border-left: 4px solid #3b82f6; }
 .stat-card.green { border-left-color: #22c55e; }
 .stat-card.red { border-left-color: #ef4444; }
+.stat-card.orange { border-left-color: #f59e0b; }
+.stat-card.blue { border-left-color: #3b82f6; }
 .stat-card h3 { font-size: 0.9rem; color: #94a3b8; margin-bottom: 0.5rem; }
 .stat-card p { font-size: 2rem; font-weight: bold; }
+.panels { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .events { background: #1e293b; border-radius: 8px; padding: 1.5rem; }
-.events h2 { margin-bottom: 1rem; color: #3b82f6; }
-#event-list { max-height: 400px; overflow-y: auto; }
-.event { padding: 0.75rem; border-bottom: 1px solid #334155; display: flex; gap: 1rem; align-items: center; }
-.event .status { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+.events h2 { margin-bottom: 1rem; color: #3b82f6; font-size: 1rem; }
+#event-list, #recent-list { max-height: 400px; overflow-y: auto; }
+.event { padding: 0.75rem; border-bottom: 1px solid #334155; display: flex; gap: 1rem; align-items: center; font-size: 0.85rem; }
+.event .status { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
 .status.resolved { background: #166534; color: #22c55e; }
 .status.failed { background: #7f1d1d; color: #ef4444; }
+.status.escalated { background: #7f1d1d; color: #f59e0b; }
 .status.open { background: #1e3a5f; color: #60a5fa; }
-.event .time { color: #64748b; font-size: 0.8rem; }
+.status.diagnosing { background: #1e3a5f; color: #818cf8; }
+.status.fixing { background: #1e3a5f; color: #a78bfa; }
+.event .time { color: #64748b; font-size: 0.75rem; margin-left: auto; }
 .placeholder { color: #64748b; text-align: center; padding: 2rem; }
+
+@media (max-width: 768px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .panels { grid-template-columns: 1fr; }
+}

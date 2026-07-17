@@ -17,12 +17,21 @@
         <div class="stat-card"><h3>Total Incidents</h3><p id="total">0</p></div>
         <div class="stat-card green"><h3>Resolved</h3><p id="resolved">0</p></div>
         <div class="stat-card red"><h3>Failed</h3><p id="failed">0</p></div>
+        <div class="stat-card orange"><h3>Open</h3><p id="open">0</p></div>
+        <div class="stat-card blue"><h3>Resolution Rate</h3><p id="rate">0%</p></div>
     </section>
 
-    <section class="events">
-        <h2>Live Events</h2>
-        <div id="event-list"><p class="placeholder">Waiting for events...</p></div>
-    </section>
+    <div class="panels">
+        <section class="events">
+            <h2>Live Events</h2>
+            <div id="event-list"><p class="placeholder">Waiting for events...</p></div>
+        </section>
+
+        <section class="events">
+            <h2>Recent Incidents</h2>
+            <div id="recent-list"><p class="placeholder">No incidents yet</p></div>
+        </section>
+    </div>
 </main>
 
 <script src="app.js"></script>
