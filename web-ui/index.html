@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent MedIC</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+    <h1>Agent MedIC</h1>
+    <span class="subtitle">Self-Healing AI SRE Agent</span>
+</header>
+
+<main>
+    <section class="stats">
+        <div class="stat-card"><h3>Total Incidents</h3><p id="total">0</p></div>
+        <div class="stat-card green"><h3>Resolved</h3><p id="resolved">0</p></div>
+        <div class="stat-card red"><h3>Failed</h3><p id="failed">0</p></div>
+    </section>
+
+    <section class="events">
+        <h2>Live Events</h2>
+        <div id="event-list"><p class="placeholder">Waiting for events...</p></div>
+    </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
