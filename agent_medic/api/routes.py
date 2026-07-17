@@ -40,7 +40,7 @@ def summary(db=Depends(_db)):
 def agent_metrics(): return metrics_collector.snapshot()
 
 @router.post("/demo/trigger")
-def trigger(scenario="redis_crash"):
+async def trigger(scenario="redis_crash"):
     if not config.DEMO_MODE: return {"error": "DEMO_MODE not enabled"}
     from simulated.data import simulated_data
     from pipeline.queue import incident_queue
@@ -51,7 +51,7 @@ def trigger(scenario="redis_crash"):
         inc = Incident(alert_id=f"demo_{scenario}_{int(time.time())}", alert_name=scenario.replace("_"," ").title(), severity="critical", message=f"Demo: {scenario}",
                        telemetry_data={"scenario": scenario})
         db.add(inc); db.commit()
-        asyncio.create_task(asyncio.to_thread(lambda: asyncio.run(incident_queue.enqueue({"incident_id": str(inc.id), "body": {"scenario": scenario, "alert_id": inc.alert_id}}))))
+        await incident_queue.enqueue({"incident_id": str(inc.id), "body": {"scenario": scenario, "alert_id": inc.alert_id}})
         return {"status": "triggered", "scenario": scenario, "incident_id": str(inc.id)}
     except Exception as e: db.rollback(); return {"error": str(e)}
     finally: db.close()

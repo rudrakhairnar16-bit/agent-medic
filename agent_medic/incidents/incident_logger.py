@@ -1,7 +1,7 @@
 from config import config
 from db.models import SessionLocal, Incident
 from api.websocket import manager
-import httpx, asyncio, logging
+import httpx, asyncio, logging, json
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -11,24 +11,30 @@ def _broadcast(msg):
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running(): loop.create_task(manager.broadcast(msg))
-    except: pass
+    except Exception as e:
+        logger.warning("Broadcast failed: %s", e)
 
 
 def _notify_slack(status, iid, error=""):
     if not config.SLACK_WEBHOOK_URL: return
     try:
         httpx.post(config.SLACK_WEBHOOK_URL, json={
-            "text": f"{'✅' if status == 'resolved' else '❌'} Agent MedIC — {status}",
+            "text": f"Agent MedIC — {status}",
             "blocks": [{"type": "section", "text": {"type": "mrkdwn",
                         "value": f"*Incident:* `{iid[:8]}`\n*Status:* {status}\n{error}"}}]
         }, timeout=5)
-    except: pass
+    except Exception as e:
+        logger.warning("Slack notify failed: %s", e)
 
 
 def _push_signoz(msg):
     if config.DEMO_MODE: return
-    try: httpx.post(f"{config.SIGNOZ_API_URL}/api/v1/logs", json={"incident_log": msg}, timeout=5)
-    except: pass
+    try:
+        httpx.post(f"{config.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs",
+                   json={"resourceLogs": [{"scopeLogs": [{"logRecords": [{"body": {"stringValue": json.dumps(msg)}, "severityText": "INFO"}]}]}]},
+                   timeout=5)
+    except Exception as e:
+        logger.warning("SigNoz log push failed: %s", e)
 
 
 def log_resolved(iid, diagnosis, fix_result):

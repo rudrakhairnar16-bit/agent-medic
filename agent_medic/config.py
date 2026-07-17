@@ -15,7 +15,7 @@ class Config:
     OLLAMA_MODEL = _env("OLLAMA_MODEL", "llama3.2")
     OLLAMA_TIMEOUT = _int("OLLAMA_TIMEOUT", 60)
     DATABASE_URL = _env("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/agent_medic")
-    DOCKER_HOST = _env("DOCKER_HOST", "unix:///var/run/docker.sock")
+    DOCKER_HOST = _env("DOCKER_HOST", "")
     SLACK_WEBHOOK_URL = _env("SLACK_WEBHOOK_URL")
     DEMO_MODE = _bool("DEMO_MODE")
     LOG_LEVEL = _env("LOG_LEVEL", "INFO")

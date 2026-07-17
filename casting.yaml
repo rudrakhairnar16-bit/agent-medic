@@ -73,7 +73,7 @@ dashboards:
 
       - title: Incident Resolution Rate
         type: stat
-        query: sum(incidents_resolved) / sum(incidents_total) * 100
+        query: sum(agent_incidents_total{status="resolved"}) / sum(agent_incidents_total) * 100
 
   - name: Agent MedIC — Service Health
     panels:

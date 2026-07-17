@@ -1,6 +1,8 @@
-import docker, subprocess, asyncio, httpx
+import docker, subprocess, asyncio, httpx, logging
 from docker.errors import NotFound, APIError
 from config import config
+
+logger = logging.getLogger(__name__)
 
 ACTIONS = {
     "restart_container": {"required": ["service_name"], "timeout": 30},
@@ -17,10 +19,19 @@ class DockerClient:
     @property
     def client(self):
         if self._client is None:
-            try: self._client = docker.from_env()
-            except:
-                try: self._client = docker.DockerClient(base_url=config.DOCKER_HOST)
-                except: self._client = None
+            try:
+                self._client = docker.from_env()
+            except docker.errors.DockerException as e:
+                if config.DOCKER_HOST:
+                    try:
+                        self._client = docker.DockerClient(base_url=config.DOCKER_HOST)
+                    except docker.errors.DockerException:
+                        self._client = None
+                        logger.warning("Docker unavailable: %s", e)
+                    else:
+                        return self._client
+                self._client = None
+                logger.warning("Docker unavailable: %s", e)
         return self._client
 
     def restart(self, name, timeout=30):

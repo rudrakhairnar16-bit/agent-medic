@@ -9,14 +9,12 @@ def _get_deps():
     if config.DEMO_MODE:
         from simulated import get_simulated_deps
         return get_simulated_deps()
-    from mcp.client import mcp_client, signoz_api
-    from mcp.response_parser import parser as mcp_parser
-    from mcp.queries import QUERY_TEMPLATES
+    from mcp.client import signoz_api, parser as mcp_parser, QUERY_TEMPLATES
     from llm.engine import ollama_client
     from fix.executor import executor
     from incidents.incident_logger import incident_logger
     from incidents.metrics_collector import metrics_collector
-    return {"mcp": mcp_client, "mcp_fallback": signoz_api, "mcp_parser": mcp_parser,
+    return {"mcp": signoz_api, "mcp_parser": mcp_parser,
             "mcp_queries": QUERY_TEMPLATES, "llm": ollama_client, "fix": executor,
             "logger": incident_logger, "metrics": metrics_collector}
 
@@ -25,14 +23,19 @@ class PipelineWorker:
 
     def __init__(self, n=3):
         self.n, self.running = n, False
+        self._tasks = []
         self.deps = _get_deps()
 
     async def start(self):
         self.running = True
-        logger.info(f"Starting {self.n} workers (demo={config.DEMO_MODE})")
-        await asyncio.gather(*[asyncio.create_task(self._loop(i)) for i in range(self.n)])
+        logger.info("Starting %s workers (demo=%s)", self.n, config.DEMO_MODE)
+        self._tasks = [asyncio.create_task(self._loop(i)) for i in range(self.n)]
+        await asyncio.gather(*self._tasks)
 
-    def stop(self): self.running = False
+    def stop(self):
+        self.running = False
+        for t in self._tasks:
+            t.cancel()
 
     async def _loop(self, wid):
         while self.running:
@@ -65,23 +68,21 @@ class PipelineWorker:
         try:
             svc = alert.get("labels", {}).get("service_name", "sample-app")
             tr = "now-5m"
-            if d["mcp"].transport != "stdio" or d["mcp"].process is None:
-                try: d["mcp"].connect()
-                except: pass
-            r = d["mcp"].query_traces(svc, tr)
-            traces = d["mcp_parser"].parse_traces(r) if not d["mcp_parser"].has_error(r) and r.get("result") else []
-            if not traces:
-                traces = [d["mcp_fallback"].query(f'{{service="{svc}"}}')] if d["mcp_fallback"].query(f'{{service="{svc}"}}') else []
-            d["metrics"].increment("mcp_queries")
-            mr = d["mcp"].query_metrics(f'avg(system_cpu_utilization{{service="{svc}"}})', tr)
-            metrics = d["mcp_parser"].parse_metrics(mr) if not d["mcp_parser"].has_error(mr) else []
-            d["metrics"].increment("mcp_queries")
-            lr = d["mcp"].query_logs(svc, tr)
-            logs = d["mcp_parser"].parse_logs(lr) if not d["mcp_parser"].has_error(lr) else []
-            d["metrics"].increment("mcp_queries")
+            mcp = d["mcp"]
+            parser = d["mcp_parser"]
+            mt = d["metrics"]
+            r = mcp.query_traces(svc, tr)
+            traces = parser.parse_traces(r) if not parser.has_error(r) else []
+            mt.increment("mcp_queries")
+            mr = mcp.query_metrics(f'avg(system_cpu_utilization{{service="{svc}"}})', tr)
+            metrics = parser.parse_metrics(mr) if not parser.has_error(mr) else []
+            mt.increment("mcp_queries")
+            lr = mcp.query_logs(svc, tr)
+            logs = parser.parse_logs(lr) if not parser.has_error(lr) else []
+            mt.increment("mcp_queries")
             return traces, metrics, logs
         except Exception as e:
-            logger.warning(f"Telemetry failed: {e}")
+            logger.warning("Telemetry collection failed: %s", e)
             return [], [], []
 
     def _diagnose(self, alert, traces, metrics, logs, retry):
