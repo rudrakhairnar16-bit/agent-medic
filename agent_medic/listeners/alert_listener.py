@@ -1,13 +1,18 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from api.schemas import AlertWebhook
 from pipeline.queue import incident_queue, deduplicator, rate_limiter, correlator
 from db.models import Incident, SessionLocal
 from incidents.metrics_collector import metrics_collector
+from config import config
 
 alert_router = APIRouter()
 
 @alert_router.post("/webhook")
-async def handle_alert(body: AlertWebhook):
+async def handle_alert(body: AlertWebhook, request: Request):
+    if config.WEBHOOK_SECRET:
+        key = request.headers.get("X-Api-Key", "")
+        if key != config.WEBHOOK_SECRET:
+            return {"status": "unauthorized"}
     raw = body.model_dump() if hasattr(body, "model_dump") else body
     aid = raw.get("alert_id")
     if deduplicator.is_duplicate(aid): return {"status": "duplicate"}

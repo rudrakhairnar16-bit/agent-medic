@@ -6,7 +6,13 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """You are an expert SRE engineer. Given telemetry data, identify root cause.
 Output valid JSON only with no extra text: {"root_cause":"...","severity":"critical|warning|info","confidence":0.0-1.0,"suggested_fix":"restart_container|scale_service|clear_cache|escalate","fix_params":{},"evidence":[]}"""
 
-def _build_prompt(alert, traces, metrics, logs, correlation=None):
+HYPOTHESIS_PROMPT = """You are an expert SRE engineer. Given telemetry data, list 2-3 possible root cause hypotheses.
+Be specific about what you suspect and why. Output as a JSON array of objects with "hypothesis" and "reasoning" fields."""
+
+EVIDENCE_PROMPT = """You are an expert SRE engineer. Based on the initial hypothesis and additional evidence, determine the root cause.
+Output valid JSON only: {"root_cause":"...","severity":"critical|warning|info","confidence":0.0-1.0,"suggested_fix":"restart_container|scale_service|clear_cache|escalate","fix_params":{},"evidence":[]}"""
+
+def _build_prompt(alert, traces, metrics, logs, correlation=None, stage="diagnose"):
     parts = [
         f"ALERT: {alert.get('alert_name','unknown')} ({alert.get('severity','info')})",
         f"SERVICE: {alert.get('labels',{}).get('service_name','unknown')}",
@@ -22,6 +28,8 @@ def _build_prompt(alert, traces, metrics, logs, correlation=None):
 def _parse_llm(text):
     try:
         d = json.loads(text)
+        if isinstance(d, list):
+            return d
         return {"root_cause": d.get("root_cause","Unknown"), "severity": d.get("severity","info"),
                 "confidence": float(d.get("confidence",0)), "suggested_fix": d.get("suggested_fix","escalate"),
                 "fix_params": d.get("fix_params",{}), "evidence": d.get("evidence",[])}
@@ -80,19 +88,32 @@ class OllamaClient:
         return resp.json().get("response", "")
 
     def diagnose(self, alert, traces, metrics, logs, correlation=None):
-        prompt = _build_prompt(alert, traces, metrics, logs, correlation)
+        base = _build_prompt(alert, traces, metrics, logs, correlation)
         last_error = None
         for attempt in range(self.MAX_RETRIES):
             try:
-                raw = self._call_llm(prompt)
-                if raw is None:
-                    last_error = f"HTTP error (attempt {attempt+1})"
+                # Stage 1: Generate hypotheses
+                hprompt = f"{HYPOTHESIS_PROMPT}\n{base}"
+                hraw = self._call_llm(hprompt)
+                if hraw is None:
+                    last_error = f"HTTP error on hypothesis (attempt {attempt+1})"
                     continue
-                parsed = _parse_llm(raw)
-                if parsed["confidence"] > 0:
+                hypotheses = _parse_llm(hraw)
+                if not isinstance(hypotheses, list):
+                    hypotheses = [{"hypothesis": hypotheses.get("root_cause","unknown"), "reasoning": "LLM direct output"}]
+
+                # Stage 2: Evaluate with evidence
+                eprompt = f"{EVIDENCE_PROMPT}\n{base}\n\nHYPOTHESES: {json.dumps(hypotheses, indent=2)}\nEvaluate each hypothesis against the evidence and output your final diagnosis."
+                eraw = self._call_llm(eprompt)
+                if eraw is None:
+                    last_error = f"HTTP error on evidence (attempt {attempt+1})"
+                    continue
+                parsed = _parse_llm(eraw)
+                if isinstance(parsed, dict) and parsed.get("confidence", 0) > 0:
+                    if isinstance(hypotheses, list):
+                        parsed["hypotheses_considered"] = [h.get("hypothesis","") for h in hypotheses[:3]]
                     return parsed
                 last_error = f"zero confidence (attempt {attempt+1})"
-                prompt += "\nYour previous response had low confidence. Re-analyze carefully and return higher confidence JSON."
             except httpx.TimeoutException:
                 last_error = f"timeout (attempt {attempt+1})"
                 logger.warning("LLM timeout, retry %s/%s", attempt + 1, self.MAX_RETRIES)

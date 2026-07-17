@@ -27,5 +27,6 @@ class Config:
     OTEL_EXPORTER_OTLP_ENDPOINT = _env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
     OTEL_SERVICE_NAME = _env("OTEL_SERVICE_NAME", "agent-medic")
     OTEL_ENABLED = _bool("OTEL_ENABLED")
+    WEBHOOK_SECRET = _env("WEBHOOK_SECRET", "")
 
 config = Config()

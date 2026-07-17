@@ -16,7 +16,7 @@ function connect() {
     ws.onclose = () => setTimeout(connect, 3000);
 }
 
-function addEvent(data) {
+function addEvent(data, persist = true) {
     const list = document.getElementById('event-list');
     const placeholder = list.querySelector('.placeholder');
     if (placeholder) placeholder.remove();
@@ -33,6 +33,26 @@ function addEvent(data) {
 
     while (list.children.length > 100) {
         list.lastChild.remove();
+    }
+
+    if (persist) {
+        try {
+            const stored = JSON.parse(localStorage.getItem('medic_events') || '[]');
+            stored.unshift({ ...data, _ts: Date.now() });
+            if (stored.length > 50) stored.length = 50;
+            localStorage.setItem('medic_events', JSON.stringify(stored));
+        } catch (e) {
+            /* localStorage not available */
+        }
+    }
+}
+
+function loadPersistedEvents() {
+    try {
+        const stored = JSON.parse(localStorage.getItem('medic_events') || '[]');
+        stored.forEach(e => addEvent(e, false));
+    } catch (e) {
+        /* ignore */
     }
 }
 
@@ -78,6 +98,7 @@ async function refreshIncidents() {
     }
 }
 
+loadPersistedEvents();
 connect();
 refreshSummary();
 refreshIncidents();

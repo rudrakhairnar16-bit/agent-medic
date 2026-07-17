@@ -34,26 +34,35 @@ Agent MedIC is a **self-observing AI SRE agent** that closes the loop:
 
 ## Architecture
 
-```
-SigNoz Alert → /webhook → Dedup → Rate-Limit → Correlator → Queue → Worker
-                                                                  │
-                          ┌───────────────────────────────────────┘
-                          ▼
-                    ┌─────────────┐
-                    │  MCP Query  │──→ Traces, Metrics, Logs from SigNoz
-                    ├─────────────┤
-                    │  LLM Diag   │──→ Ollama (or rule-based fallback)
-                    ├─────────────┤
-                    │  Fix Exec   │──→ Docker restart / scale / clear cache
-                    ├─────────────┤
-                    │  Verify     │──→ Health check after fix
-                    └─────────────┘
-                          │
-                          ▼
-              ┌──────────────────────┐
-              │  Log to SigNoz + DB  │──→ Traces, Metrics, WebSocket, Slack
-              │  + WebSocket + Slack │
-              └──────────────────────┘
+```mermaid
+flowchart LR
+    A[SigNoz Alert] --> B[/webhook]
+    B --> C[Dedup]
+    C --> D[Rate-Limit]
+    D --> E[Correlator]
+    E --> F[Queue]
+    F --> G[Worker Pool]
+
+    G --> H1[MCP Query]
+    G --> H2[LLM Diagnosis]
+    G --> H3[Fix Execute]
+    G --> H4[Verify]
+
+    H1 --> I[Traces<br/>Metrics<br/>Logs]
+    I --> H2
+    H2 --> H3
+    H3 --> H4
+
+    H4 --> J[Log]
+    J --> K[(PostgreSQL)]
+    J --> L[SigNoz OTLP]
+    J --> M[WebSocket]
+    J --> N[Slack]
+
+    subgraph Self-Observability
+        G -.-> O[OTel Spans]
+        O -.-> L
+    end
 ```
 
 **Agent emits its own OTel telemetry → SigNoz** — every pipeline stage, fix attempt, and LLM call is traced.
@@ -125,24 +134,18 @@ Run automated demo: `bash scripts/demo.sh --simulated`
 ## Quick Start
 
 ```bash
-# 1. Clone
-git clone https://github.com/rudrakhairnar16-bit/agent-medic.git
-cd agent-medic
+# 1. Start agent with demo mode (no real services needed)
+DEMO_MODE=true python agent_medic/main.py
 
-# 2. Install SigNoz via Foundry
-signoz install
+# 2. Trigger a scenario
+curl -X POST "http://localhost:8000/demo/trigger?scenario=redis_crash"
+```
 
-# 3. Start everything
+Or with Docker Compose (requires SigNoz + Ollama):
+
+```bash
 docker compose up -d
-
-# 4. Pull LLM model
-docker exec -it ollama ollama pull llama3.2
-
-# 5. Run demo
 bash scripts/demo.sh --simulated
-
-# 6. Open dashboard
-open http://localhost:3000
 ```
 
 ---

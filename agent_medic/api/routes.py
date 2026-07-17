@@ -1,5 +1,5 @@
 import time, asyncio
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from db.models import SessionLocal, Incident
 from config import config
 from incidents.metrics_collector import metrics_collector
@@ -51,6 +51,45 @@ def summary(db=Depends(_db)):
 
 @router.get("/metrics")
 def agent_metrics(): return metrics_collector.snapshot()
+
+@router.get("/metrics/prometheus")
+def prometheus_metrics():
+    snap = metrics_collector.snapshot()
+    from worker import pipeline_worker
+    from pipeline.queue import incident_queue
+    lines = [
+        "# HELP agent_medic_incidents_total Total incidents received",
+        "# TYPE agent_medic_incidents_total counter",
+        f"agent_medic_incidents_total {snap.get('incidents_total', 0)}",
+        "# HELP agent_medic_incidents_resolved Total incidents resolved",
+        "# TYPE agent_medic_incidents_resolved counter",
+        f"agent_medic_incidents_resolved {snap.get('incidents_resolved', 0)}",
+        "# HELP agent_medic_incidents_failed Total incidents failed",
+        "# TYPE agent_medic_incidents_failed counter",
+        f"agent_medic_incidents_failed {snap.get('incidents_failed', 0)}",
+        "# HELP agent_medic_llm_calls_total Total LLM calls",
+        "# TYPE agent_medic_llm_calls_total counter",
+        f"agent_medic_llm_calls_total {snap.get('llm_calls', 0)}",
+        "# HELP agent_medic_mcp_queries_total Total MCP queries",
+        "# TYPE agent_medic_mcp_queries_total counter",
+        f"agent_medic_mcp_queries_total {snap.get('mcp_queries', 0)}",
+        "# HELP agent_medic_fix_attempts_total Total fix attempts",
+        "# TYPE agent_medic_fix_attempts_total counter",
+        f"agent_medic_fix_attempts_total {snap.get('fix_attempts', 0)}",
+        "# HELP agent_medic_fix_successes_total Total fix successes",
+        "# TYPE agent_medic_fix_successes_total counter",
+        f"agent_medic_fix_successes_total {snap.get('fix_successes', 0)}",
+        "# HELP agent_medic_queue_depth Current queue depth",
+        "# TYPE agent_medic_queue_depth gauge",
+        f"agent_medic_queue_depth {incident_queue.qsize()}",
+        "# HELP agent_medic_worker_alive Whether worker is running",
+        "# TYPE agent_medic_worker_alive gauge",
+        f"agent_medic_worker_alive {1 if pipeline_worker.running else 0}",
+        "# HELP agent_medic_uptime_seconds Agent uptime",
+        "# TYPE agent_medic_uptime_seconds gauge",
+        f"agent_medic_uptime_seconds {int(time.time() - _start)}",
+    ]
+    return Response("\n".join(lines) + "\n", media_type="text/plain")
 
 @router.post("/demo/trigger")
 async def trigger(scenario="redis_crash"):

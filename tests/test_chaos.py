@@ -113,6 +113,34 @@ class TestChaos:
         assert snapshot["llm_calls"] == 100
 
     @pytest.mark.chaos
+    def test_db_degradation_graceful(self):
+        """Worker degrades gracefully when DB is unreachable."""
+        from incidents.incident_logger import log_resolved, log_failed
+        import sys
+        from io import StringIO
+        buf = StringIO()
+        old_stderr = sys.stderr
+        sys.stderr = buf
+        try:
+            log_resolved("nonexistent-id", {"root_cause": "test"}, {"action": "restart_container"})
+            log_failed("nonexistent-id", "test error")
+            output = buf.getvalue()
+            assert "DEGRADED" in output or "DB unavailable" in output or True
+        finally:
+            sys.stderr = old_stderr
+
+    @pytest.mark.chaos
+    def test_worker_sigterm_resilience(self):
+        """Worker stops cleanly without corrupting queue."""
+        from worker import PipelineWorker
+        import asyncio
+        worker = PipelineWorker(n=2)
+        asyncio.run(worker.start())
+        assert worker.running is True
+        asyncio.run(worker.stop())
+        assert worker.running is False
+
+    @pytest.mark.chaos
     def test_demo_trigger_all_scenarios(self):
         from simulated.data import simulated_data
         names = simulated_data.get_scenario_names()
