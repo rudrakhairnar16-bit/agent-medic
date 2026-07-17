@@ -4,12 +4,30 @@ from docker.errors import DockerException, NotFound, APIError
 
 class DockerClient:
     def __init__(self, base_url: str = "unix:///var/run/docker.sock"):
-        try:
-            self.client = docker.from_env()
-        except DockerException:
-            self.client = docker.DockerClient(base_url=base_url)
+        self.base_url = base_url
+        self._client = None
+
+    @property
+    def client(self):
+        if self._client is None:
+            try:
+                self._client = docker.from_env()
+            except Exception:
+                try:
+                    self._client = docker.DockerClient(base_url=self.base_url)
+                except Exception:
+                    self._client = None
+        return self._client
+
+    def _ensure_available(self):
+        if self.client is None:
+            return {"status": "error", "message": "Docker daemon not available"}
+        return None
 
     def restart_container(self, service_name: str, timeout: int = 30) -> dict:
+        err = self._ensure_available()
+        if err:
+            return err
         try:
             container = self.client.containers.get(service_name)
             container.restart(timeout=timeout)

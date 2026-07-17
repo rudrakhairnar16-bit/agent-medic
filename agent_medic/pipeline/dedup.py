@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict
 
 
@@ -7,8 +7,11 @@ class Deduplicator:
         self.window_minutes = window_minutes
         self.seen: Dict[str, datetime] = {}
 
+    def _now(self):
+        return datetime.now(timezone.utc)
+
     def is_duplicate(self, alert_id: str) -> bool:
-        now = datetime.utcnow()
+        now = self._now()
         if alert_id in self.seen:
             last_seen = self.seen[alert_id]
             if now - last_seen < timedelta(minutes=self.window_minutes):
@@ -17,7 +20,7 @@ class Deduplicator:
         return False
 
     def cleanup(self):
-        cutoff = datetime.utcnow() - timedelta(minutes=self.window_minutes)
+        cutoff = self._now() - timedelta(minutes=self.window_minutes)
         self.seen = {k: v for k, v in self.seen.items() if v > cutoff}
 
 
