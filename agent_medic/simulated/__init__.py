@@ -46,7 +46,7 @@ class SimulatedFixExecutor:
         return {"status":"success","action":action,"message":f"Simulated: {action}","verified":True,"simulated":True}
 
 class SimulatedOllamaClient:
-    def diagnose(self, alert, traces, metrics, logs, correlation=None):
+    def diagnose(self, alert, traces, metrics, logs, correlation=None, **kwargs):
         d = dict(simulated_data.get_data(alert.get("scenario","redis_crash"))["expected_diagnosis"])
         d["simulated"] = True; return d
 

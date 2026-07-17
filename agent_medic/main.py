@@ -1,7 +1,8 @@
-import asyncio, logging, sys, os
+import asyncio, logging, sys, os, time, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from api.routes import router
 from api.websocket import ws_router
 from listeners.alert_listener import alert_router
@@ -18,6 +19,21 @@ app.include_router(alert_router)
 app.include_router(router)
 app.include_router(ws_router)
 Base.metadata.create_all(bind=engine)
+
+_webhook_calls = collections.defaultdict(list)
+WEBHOOK_RATE = 20
+WEBHOOK_WINDOW = 60
+
+@app.middleware("http")
+async def webhook_rate_limit(request: Request, call_next):
+    if request.url.path == "/webhook" and request.method == "POST":
+        ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        _webhook_calls[ip] = [t for t in _webhook_calls[ip] if now - t < WEBHOOK_WINDOW]
+        if len(_webhook_calls[ip]) >= WEBHOOK_RATE:
+            return JSONResponse({"status": "rate_limited", "error": "Too many requests"}, 429)
+        _webhook_calls[ip].append(now)
+    return await call_next(request)
 
 @app.on_event("startup")
 async def startup():

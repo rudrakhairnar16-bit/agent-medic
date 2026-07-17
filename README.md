@@ -4,7 +4,7 @@
 [![OpenTelemetry](https://img.shields.io/badge/OTel-Instrumented-blue)](https://opentelemetry.io)
 [![Python](https://img.shields.io/badge/Python-3.11+-green)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-50%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-53%20passing-brightgreen)](tests/)
 [![Hackathon](https://img.shields.io/badge/Agents%20of%20SigNoz-2026-purple)](https://www.wemakedevs.org/hackathons/signoz)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://docker.com)
 
@@ -153,7 +153,7 @@ bash scripts/demo.sh --simulated
 ## Testing
 
 ```bash
-pytest -v                          # All 50+ tests
+pytest -v                          # All 53+ tests
 pytest -m "not chaos" -v           # Skip destructive tests
 pytest -m chaos -v                 # Chaos tests only
 pytest -m "P0" -v                  # Critical tests only

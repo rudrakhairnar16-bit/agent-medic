@@ -90,7 +90,7 @@ class PipelineWorker:
         d = self.deps
         try:
             d["metrics"].increment("llm_calls")
-            diag = d["llm"].diagnose(alert, traces, metrics, logs, correlation)
+            diag = d["llm"].diagnose(alert, traces, metrics, logs, correlation, mcp_client=d.get("mcp"))
             record_llm_call(alert.get("incident_id", "x"), config.OLLAMA_MODEL, True)
             if retry > 0 and diag.get("confidence", 0) < 0.5:
                 diag["suggested_fix"] = "escalate"

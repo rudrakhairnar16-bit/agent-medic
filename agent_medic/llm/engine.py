@@ -9,7 +9,12 @@ Output valid JSON only with no extra text: {"root_cause":"...","severity":"criti
 HYPOTHESIS_PROMPT = """You are an expert SRE engineer. Given telemetry data, list 2-3 possible root cause hypotheses.
 Be specific about what you suspect and why. Output as a JSON array of objects with "hypothesis" and "reasoning" fields."""
 
-EVIDENCE_PROMPT = """You are an expert SRE engineer. Based on the initial hypothesis and additional evidence, determine the root cause.
+TOOL_USE_PROMPT = """You are an expert SRE engineer. Given these hypotheses, what additional telemetry queries would confirm or rule out each one?
+Available query types: metrics (PromQL), traces (service name), logs (service name).
+Output a JSON array of tool calls: [{"type":"metrics|traces|logs","target":"...","reason":"..."}]
+Limit to 3 queries. Output ONLY the JSON array."""
+
+EVIDENCE_PROMPT = """You are an expert SRE engineer. Based on the hypotheses and all evidence (initial + tool results), determine the root cause.
 Output valid JSON only: {"root_cause":"...","severity":"critical|warning|info","confidence":0.0-1.0,"suggested_fix":"restart_container|scale_service|clear_cache|escalate","fix_params":{},"evidence":[]}"""
 
 def _build_prompt(alert, traces, metrics, logs, correlation=None, stage="diagnose"):
@@ -87,7 +92,24 @@ class OllamaClient:
             return None
         return resp.json().get("response", "")
 
-    def diagnose(self, alert, traces, metrics, logs, correlation=None):
+    def _execute_tool(self, tc, mcp_client, tr="now-5m"):
+        try:
+            t = tc.get("type")
+            target = tc.get("target", "")
+            if t == "metrics":
+                res = mcp_client.query_metrics(target, tr)
+                return {"type": "metrics", "query": target, "result": res.get("result", [])}
+            if t == "traces":
+                res = mcp_client.query_traces(target, tr)
+                return {"type": "traces", "service": target, "result": res.get("result", [])}
+            if t == "logs":
+                res = mcp_client.query_logs(target, tr)
+                return {"type": "logs", "service": target, "result": res.get("result", [])}
+        except Exception as e:
+            logger.warning("Tool call failed: %s", e)
+        return None
+
+    def diagnose(self, alert, traces, metrics, logs, correlation=None, mcp_client=None):
         base = _build_prompt(alert, traces, metrics, logs, correlation)
         last_error = None
         for attempt in range(self.MAX_RETRIES):
@@ -102,8 +124,24 @@ class OllamaClient:
                 if not isinstance(hypotheses, list):
                     hypotheses = [{"hypothesis": hypotheses.get("root_cause","unknown"), "reasoning": "LLM direct output"}]
 
-                # Stage 2: Evaluate with evidence
-                eprompt = f"{EVIDENCE_PROMPT}\n{base}\n\nHYPOTHESES: {json.dumps(hypotheses, indent=2)}\nEvaluate each hypothesis against the evidence and output your final diagnosis."
+                # Stage 2: Tool-use — LLM requests targeted data
+                additional = []
+                if mcp_client and isinstance(hypotheses, list) and len(hypotheses) > 0:
+                    tprompt = f"{TOOL_USE_PROMPT}\nHYPOTHESES: {json.dumps(hypotheses, indent=2)}"
+                    traw = self._call_llm(tprompt)
+                    if traw:
+                        tool_calls = _parse_llm(traw)
+                        if isinstance(tool_calls, list):
+                            for tc in tool_calls[:3]:
+                                result = self._execute_tool(tc, mcp_client)
+                                if result:
+                                    additional.append(result)
+
+                # Stage 3: Evaluate with all evidence
+                context = f"{base}\n\nHYPOTHESES: {json.dumps(hypotheses, indent=2)}"
+                if additional:
+                    context += f"\nTOOL_RESULTS: {json.dumps(additional, indent=2)}"
+                eprompt = f"{EVIDENCE_PROMPT}\n{context}\nEvaluate and output your final diagnosis."
                 eraw = self._call_llm(eprompt)
                 if eraw is None:
                     last_error = f"HTTP error on evidence (attempt {attempt+1})"
@@ -112,6 +150,8 @@ class OllamaClient:
                 if isinstance(parsed, dict) and parsed.get("confidence", 0) > 0:
                     if isinstance(hypotheses, list):
                         parsed["hypotheses_considered"] = [h.get("hypothesis","") for h in hypotheses[:3]]
+                    if additional:
+                        parsed["tool_calls_executed"] = [a["query"] for a in additional if "query" in a]
                     return parsed
                 last_error = f"zero confidence (attempt {attempt+1})"
             except httpx.TimeoutException:
