@@ -7,10 +7,17 @@
 [![Tests](https://img.shields.io/badge/Tests-56%20passing-brightgreen)](tests/)
 [![Hackathon](https://img.shields.io/badge/Agents%20of%20SigNoz-2026-purple)](https://www.wemakedevs.org/hackathons/signoz)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://docker.com)
+[![CI](https://github.com/rudrakhairnar16-bit/agent-medic/actions/workflows/ci.yml/badge.svg)](https://github.com/rudrakhairnar16-bit/agent-medic/actions/workflows/ci.yml)
 
 **Track 01 — AI & Agent Observability** | Agents of SigNoz Hackathon 2026
 
 **Team Enthusiast** — Rudra & Het Patel | Dr. Kiran and Pallavi Patel Global University
+
+## Demo Video
+
+[![Agent MedIC Demo](https://img.shields.io/badge/Watch-Demo%20Video-red?logo=youtube)](https://your-video-url-here.com)
+
+See the full loop: alert triggers → agent traces itself in SigNoz → diagnoses via LLM → applies fix → verifies → logs back to SigNoz. All in under 60 seconds.
 
 ---
 
@@ -31,6 +38,13 @@ Agent MedIC is a **self-observing AI SRE agent** that closes the loop:
 7. **Traces itself** — every pipeline stage emits OpenTelemetry spans
 
 ---
+
+## Screenshots
+
+| SigNoz Dashboard — Agent Pipeline Traces | Web UI — Live Incident Feed |
+|---|---|
+| ![](docs/screenshot-signoz-traces.png) | ![](docs/screenshot-webui.png) |
+| *Agent pipeline stages visible as OTel spans in SigNoz* | *Real-time WebSocket updates as agent processes alerts* |
 
 ## Architecture
 
