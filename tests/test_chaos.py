@@ -142,21 +142,31 @@ class TestChaos:
 
     @pytest.mark.chaos
     def test_pumba_container_kill(self):
-        """Real chaos: kill a Docker container and verify agent detects it (requires Docker)."""
-        import docker
+        """Real chaos: kill and restart a container (requires Docker + pumba)."""
+        import docker, subprocess, os
         try:
             client = docker.from_env()
             client.ping()
         except Exception:
             pytest.skip("Docker not available")
-        # List running containers as a lightweight chaos assertion
-        containers = client.containers.list(all=True)
-        assert len(containers) >= 0
-        # If a container named agent-medic-worker exists, verify it can be restarted
-        for c in containers:
-            if "worker" in c.name:
-                assert c.status in ("running", "exited")
+        target = None
+        for c in client.containers.list():
+            if "redis" in c.name.lower():
+                target = c
                 break
+        if target is None:
+            pytest.skip("No redis container found to test chaos")
+        assert target.status == "running", "Redis should be running before chaos"
+        pumba = os.popen(f'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock gaiaadm/pumba pumba kill {target.name}')
+        exit_code = pumba.close()
+        if exit_code is not None:
+            pytest.skip("pumba not available")
+        import time; time.sleep(2)
+        target.reload()
+        assert target.status == "exited", "Container should be killed by pumba"
+        target.restart()
+        time.sleep(2); target.reload()
+        assert target.status == "running", "Container should recover after restart"
 
     @pytest.mark.chaos
     def test_demo_trigger_all_scenarios(self):

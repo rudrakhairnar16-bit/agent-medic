@@ -37,3 +37,23 @@ class TestLLMEngine:
         from agent_medic.llm.response_parser import response_parser
         result = response_parser.parse("not json")
         assert result["root_cause"] == "Failed to parse LLM response"
+
+    @pytest.mark.P1
+    def test_tool_use_loop_with_mcp_client(self):
+        from agent_medic.llm.engine import OllamaClient, _parse_llm
+        from agent_medic.simulated import SimulatedMCPClient
+        mcp = SimulatedMCPClient(scenario="redis_crash")
+        client = OllamaClient()
+        alert = {"alert_name": "Redis Down", "severity": "critical", "labels": {"service_name": "redis"}}
+        result = client._execute_tool({"type": "metrics", "target": "avg(redis_memory_usage)"}, mcp)
+        assert result is not None
+        assert result["type"] == "metrics"
+        assert "result" in result
+        result2 = client._execute_tool({"type": "logs", "target": "redis"}, mcp)
+        assert result2 is not None
+        assert result2["type"] == "logs"
+        result3 = client._execute_tool({"type": "traces", "target": "redis"}, mcp)
+        assert result3 is not None
+        assert result3["type"] == "traces"
+        result4 = client._execute_tool({"type": "unknown", "target": "x"}, mcp)
+        assert result4 is None

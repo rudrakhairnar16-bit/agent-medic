@@ -17,7 +17,7 @@ Limit to 3 queries. Output ONLY the JSON array."""
 EVIDENCE_PROMPT = """You are an expert SRE engineer. Based on the hypotheses and all evidence (initial + tool results), determine the root cause.
 Output valid JSON only: {"root_cause":"...","severity":"critical|warning|info","confidence":0.0-1.0,"suggested_fix":"restart_container|scale_service|clear_cache|escalate","fix_params":{},"evidence":[]}"""
 
-def _build_prompt(alert, traces, metrics, logs, correlation=None, stage="diagnose"):
+def _build_prompt(alert, traces, metrics, logs, correlation=None):
     parts = [
         f"ALERT: {alert.get('alert_name','unknown')} ({alert.get('severity','info')})",
         f"SERVICE: {alert.get('labels',{}).get('service_name','unknown')}",
@@ -32,14 +32,17 @@ def _build_prompt(alert, traces, metrics, logs, correlation=None, stage="diagnos
 
 def _parse_llm(text):
     try:
-        d = json.loads(text)
-        if isinstance(d, list):
-            return d
-        return {"root_cause": d.get("root_cause","Unknown"), "severity": d.get("severity","info"),
-                "confidence": float(d.get("confidence",0)), "suggested_fix": d.get("suggested_fix","escalate"),
-                "fix_params": d.get("fix_params",{}), "evidence": d.get("evidence",[])}
+        return json.loads(text)
     except (json.JSONDecodeError, ValueError):
         return {"root_cause":"Failed to parse LLM response","severity":"info","confidence":0.0,"suggested_fix":"escalate","fix_params":{},"evidence":[]}
+
+def _parse_diagnosis(text):
+    raw = _parse_llm(text)
+    if isinstance(raw, dict):
+        return {"root_cause": raw.get("root_cause","Unknown"), "severity": raw.get("severity","info"),
+                "confidence": float(raw.get("confidence",0)), "suggested_fix": raw.get("suggested_fix","escalate"),
+                "fix_params": raw.get("fix_params",{}), "evidence": raw.get("evidence",[])}
+    return {"root_cause":"Failed to parse LLM response","severity":"info","confidence":0.0,"suggested_fix":"escalate","fix_params":{},"evidence":[]}
 
 class RuleBasedFallback:
     @staticmethod
@@ -146,8 +149,8 @@ class OllamaClient:
                 if eraw is None:
                     last_error = f"HTTP error on evidence (attempt {attempt+1})"
                     continue
-                parsed = _parse_llm(eraw)
-                if isinstance(parsed, dict) and parsed.get("confidence", 0) > 0:
+                parsed = _parse_diagnosis(eraw)
+                if parsed.get("confidence", 0) > 0:
                     if isinstance(hypotheses, list):
                         parsed["hypotheses_considered"] = [h.get("hypothesis","") for h in hypotheses[:3]]
                     if additional:

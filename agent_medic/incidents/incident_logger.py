@@ -85,4 +85,8 @@ def log_failed(iid, error):
     finally: db.close()
 
 
-incident_logger = type("IL", (), {"log_resolved": staticmethod(log_resolved), "log_failed": staticmethod(log_failed)})()
+class IncidentLogger:
+    log_resolved = staticmethod(log_resolved)
+    log_failed = staticmethod(log_failed)
+
+incident_logger = IncidentLogger()

@@ -4,7 +4,7 @@
 [![OpenTelemetry](https://img.shields.io/badge/OTel-Instrumented-blue)](https://opentelemetry.io)
 [![Python](https://img.shields.io/badge/Python-3.11+-green)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-53%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-56%20passing-brightgreen)](tests/)
 [![Hackathon](https://img.shields.io/badge/Agents%20of%20SigNoz-2026-purple)](https://www.wemakedevs.org/hackathons/signoz)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://docker.com)
 
@@ -131,21 +131,20 @@ Run automated demo: `bash scripts/demo.sh --simulated`
 
 ---
 
-## Quick Start
+## Quick Start (2 commands, zero dependencies)
 
 ```bash
-# 1. Start agent with demo mode (no real services needed)
-DEMO_MODE=true python agent_medic/main.py
-
-# 2. Trigger a scenario
+DEMO_MODE=true python agent_medic/main.py &
 curl -X POST "http://localhost:8000/demo/trigger?scenario=redis_crash"
 ```
 
-Or with Docker Compose (requires SigNoz + Ollama):
+That's it. The agent runs fully offline with simulated data — no Docker, no Ollama, no SigNoz, no database. Open `http://localhost:8000` for the Web UI or watch the terminal for pipeline logs.
+
+**Full production stack** (SigNoz + Ollama + PostgreSQL + Docker):
 
 ```bash
 docker compose up -d
-bash scripts/demo.sh --simulated
+python agent_medic/main.py
 ```
 
 ---
@@ -153,7 +152,7 @@ bash scripts/demo.sh --simulated
 ## Testing
 
 ```bash
-pytest -v                          # All 53+ tests
+pytest -v                          # All 56+ passing tests
 pytest -m "not chaos" -v           # Skip destructive tests
 pytest -m chaos -v                 # Chaos tests only
 pytest -m "P0" -v                  # Critical tests only

@@ -1,4 +1,4 @@
-import asyncio, logging, sys, os, time, collections
+import asyncio, logging, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, Request
@@ -9,6 +9,7 @@ from listeners.alert_listener import alert_router
 from db.models import Base, engine
 from worker import pipeline_worker
 from config import config
+from api.middleware import webhook_calls, WEBHOOK_RATE, WEBHOOK_WINDOW, check_webhook_rate
 
 fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL), format=fmt)
@@ -20,19 +21,12 @@ app.include_router(router)
 app.include_router(ws_router)
 Base.metadata.create_all(bind=engine)
 
-_webhook_calls = collections.defaultdict(list)
-WEBHOOK_RATE = 20
-WEBHOOK_WINDOW = 60
-
 @app.middleware("http")
 async def webhook_rate_limit(request: Request, call_next):
     if request.url.path == "/webhook" and request.method == "POST":
         ip = request.client.host if request.client else "unknown"
-        now = time.time()
-        _webhook_calls[ip] = [t for t in _webhook_calls[ip] if now - t < WEBHOOK_WINDOW]
-        if len(_webhook_calls[ip]) >= WEBHOOK_RATE:
+        if not check_webhook_rate(ip):
             return JSONResponse({"status": "rate_limited", "error": "Too many requests"}, 429)
-        _webhook_calls[ip].append(now)
     return await call_next(request)
 
 @app.on_event("startup")
