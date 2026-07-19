@@ -143,7 +143,7 @@ class TestChaos:
     @pytest.mark.chaos
     def test_pumba_container_kill(self):
         """Real chaos: kill and restart a container (requires Docker + pumba)."""
-        import docker, subprocess, os
+        import docker, subprocess, time
         try:
             client = docker.from_env()
             client.ping()
@@ -157,11 +157,15 @@ class TestChaos:
         if target is None:
             pytest.skip("No redis container found to test chaos")
         assert target.status == "running", "Redis should be running before chaos"
-        pumba = os.popen(f'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock gaiaadm/pumba pumba kill {target.name}')
-        exit_code = pumba.close()
-        if exit_code is not None:
+        try:
+            subprocess.run(
+                ["docker", "run", "--rm", "-v", "/var/run/docker.sock:/var/run/docker.sock",
+                 "gaiaadm/pumba", "kill", target.name],
+                capture_output=True, timeout=30, check=True
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
             pytest.skip("pumba not available")
-        import time; time.sleep(2)
+        time.sleep(2)
         target.reload()
         assert target.status == "exited", "Container should be killed by pumba"
         target.restart()
