@@ -63,7 +63,16 @@ def trace_pipeline_stage(stage: str, attrs: dict = None):
             span.set_attribute("timeout", ms > max_duration * 1000)
             _rec_hist("agent.pipeline.duration_ms", ms, stage=stage)
 
-def record_incident(iid, action, status): _rec("agent.incidents.total", incident_id=iid[:8], action=action, status=status)
+def record_incident(iid, action, status):
+    _rec("agent.incidents.total", incident_id=iid[:8], action=action, status=status)
+    try:
+        from incidents.metrics_collector import metrics_collector
+        if status == "resolved":
+            metrics_collector.increment("incidents_resolved")
+        elif status == "failed":
+            metrics_collector.increment("incidents_failed")
+    except Exception:
+        pass
 def record_fix_attempt(iid, fix_type): _rec("agent.fix.attempts", incident_id=iid[:8], fix_type=fix_type)
 def record_fix_success(iid, fix_type): _rec("agent.fix.successes", incident_id=iid[:8], fix_type=fix_type)
 def record_llm_call(iid, model, ok): _rec("agent.llm.calls", incident_id=iid[:8], model=model, success=str(ok))

@@ -19,7 +19,13 @@ app = FastAPI(title="Agent MedIC", version="3.1.0", description="Self-Healing AI
 app.include_router(alert_router)
 app.include_router(router)
 app.include_router(ws_router)
-Base.metadata.create_all(bind=engine)
+
+def init_db():
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database schema ready")
+    except Exception as e:
+        logger.warning("Database unavailable (agent runs in degraded mode): %s", e)
 
 @app.middleware("http")
 async def webhook_rate_limit(request: Request, call_next):
@@ -31,6 +37,7 @@ async def webhook_rate_limit(request: Request, call_next):
 
 @app.on_event("startup")
 async def startup():
+    init_db()
     if config.OTEL_ENABLED and not config.DEMO_MODE:
         try:
             from otel import init_otel
@@ -46,4 +53,5 @@ async def shutdown():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

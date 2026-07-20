@@ -1,8 +1,14 @@
-import docker, subprocess, asyncio, httpx, logging
-from docker.errors import NotFound, APIError
+import subprocess, asyncio, httpx, logging
 from config import config
 
 logger = logging.getLogger(__name__)
+
+try:
+    import docker
+    from docker.errors import NotFound, APIError
+except ImportError:
+    docker = None
+    NotFound = APIError = Exception
 
 ACTIONS = {
     "restart_container": {"required": ["service_name"], "timeout": 30},
@@ -19,6 +25,10 @@ class DockerClient:
     @property
     def client(self):
         if self._client is None:
+            if docker is None:
+                logger.warning("Docker SDK not installed; fix actions unavailable")
+                self._client = None
+                return None
             try:
                 self._client = docker.from_env()
             except docker.errors.DockerException as e:

@@ -31,11 +31,11 @@ class SimulatedMCPClient:
         if name in simulated_data.get_scenario_names():
             self.scenario = name
 
-    def query_traces(self, svc="app", tr="now-5m"):
+    def query_traces(self, svc="app", time_range="now-5m"):
         return {"result": simulated_data.get_data(self.scenario)["traces"], "simulated": True}
-    def query_metrics(self, q="", tr="now-5m"):
+    def query_metrics(self, q="", time_range="now-5m"):
         return {"result": simulated_data.get_data(self.scenario)["metrics"], "simulated": True}
-    def query_logs(self, svc="app", tr="now-5m"):
+    def query_logs(self, svc="app", time_range="now-5m"):
         return {"result": simulated_data.get_data(self.scenario)["logs"], "simulated": True}
     def get_alerts(self): return {"result": [{"alert_id":"sim_001","name":"Demo"}]}
     def connect(self): pass

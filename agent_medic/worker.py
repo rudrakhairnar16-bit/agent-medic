@@ -45,6 +45,7 @@ class PipelineWorker:
                 await self._process(wid, data)
             except asyncio.TimeoutError: continue
             except Exception as e: logger.error("Worker %s: %s", wid, e)
+            await asyncio.sleep(0.05)
 
     async def _process(self, wid, data):
         iid, alert, retry = data.get("incident_id"), data.get("body", {}), data.get("retry_count", 0)
