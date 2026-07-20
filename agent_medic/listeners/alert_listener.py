@@ -18,6 +18,12 @@ async def handle_alert(body: AlertWebhook, request: Request):
     if deduplicator.is_duplicate(aid): return {"status": "duplicate"}
     if not rate_limiter.allow(): return {"status": "rate_limited"}
     correlator.push(raw)
+    if config.DEMO_MODE:
+        import uuid
+        iid = str(uuid.uuid4())
+        metrics_collector.increment("incidents_total")
+        await incident_queue.enqueue({"incident_id": iid, "alert_id": aid, "body": raw})
+        return {"status": "accepted", "incident_id": iid, "mode": "demo"}
     db = SessionLocal()
     try:
         inc = Incident(alert_id=aid, alert_name=raw.get("alert_name","unknown"), severity=raw.get("severity","info"),

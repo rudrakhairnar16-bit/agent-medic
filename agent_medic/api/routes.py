@@ -97,8 +97,14 @@ async def trigger(scenario="redis_crash"):
     from pipeline.queue import rate_limiter, incident_queue
     if not rate_limiter.allow(): return {"status": "rate_limited", "error": "Too many requests"}
     from simulated.data import simulated_data
+    import uuid
     names = simulated_data.get_scenario_names()
     if scenario not in names: return {"error": f"Invalid. Choose: {names}"}
+    iid = str(uuid.uuid4())
+    if config.DEMO_MODE:
+        metrics_collector.increment("incidents_total")
+        await incident_queue.enqueue({"incident_id": iid, "body": {"scenario": scenario, "alert_id": f"demo_{scenario}"}})
+        return {"status": "triggered", "scenario": scenario, "incident_id": iid, "mode": "demo"}
     db = SessionLocal()
     try:
         inc = Incident(alert_id=f"demo_{scenario}_{int(time.time())}", alert_name=scenario.replace("_"," ").title(), severity="critical", message=f"Demo: {scenario}",
