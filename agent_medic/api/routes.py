@@ -1,8 +1,9 @@
 import time, asyncio
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, WebSocket, WebSocketDisconnect
 from db.models import SessionLocal, Incident
 from config import config
 from incidents.metrics_collector import metrics_collector
+from api.websocket import manager
 
 router = APIRouter()
 _start = time.time()
@@ -114,3 +115,10 @@ async def trigger(scenario="redis_crash"):
         return {"status": "triggered", "scenario": scenario, "incident_id": str(inc.id)}
     except Exception as e: db.rollback(); return {"error": str(e)}
     finally: db.close()
+
+@router.websocket("/ws/events")
+async def ws_endpoint(ws: WebSocket):
+    await manager.connect(ws)
+    try:
+        while True: await ws.receive_text()
+    except WebSocketDisconnect: manager.disconnect(ws)

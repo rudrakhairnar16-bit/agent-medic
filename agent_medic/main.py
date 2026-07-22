@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from api.routes import router
-from api.websocket import ws_router
+
 from listeners.alert_listener import alert_router
 from db.models import Base, engine
 from worker import pipeline_worker
@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Agent MedIC", version="3.1.0", description="Self-Healing AI SRE Agent")
 app.include_router(alert_router)
 app.include_router(router)
-app.include_router(ws_router)
 
 def init_db():
     try:

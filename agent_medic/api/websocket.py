@@ -1,6 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-
-ws_router = APIRouter()
+from fastapi import WebSocket, WebSocketDisconnect
 
 class ConnectionManager:
     def __init__(self): self.active = set()
@@ -14,10 +12,3 @@ class ConnectionManager:
         self.active -= dead
 
 manager = ConnectionManager()
-
-@ws_router.websocket("/ws/events")
-async def ws_endpoint(ws: WebSocket):
-    await manager.connect(ws)
-    try:
-        while True: await ws.receive_text()
-    except WebSocketDisconnect: manager.disconnect(ws)
