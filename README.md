@@ -13,6 +13,10 @@
 
 **Team Enthusiast** — Rudra Khaire & Het Patel | Dr. Kiran and Pallavi Patel Global University
 
+## Demo Video
+
+[![Watch Demo](https://img.shields.io/badge/Watch-Demo%20Video-red?logo=youtube)](https://youtu.be/73su0xAGLkg)
+
 ## Blog
 
 [![Blog](https://img.shields.io/badge/Read-Blog%20Post-blue?logo=hashnode)](https://contextos-second-brain-for-developer.hashnode.dev/agent-medic-4-things-signoz-showed-us-about-our-self-healing-ai-agent-that-we-never-expected)
