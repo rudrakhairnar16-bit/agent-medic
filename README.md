@@ -74,6 +74,18 @@ flowchart LR
 
 ---
 
+## Screenshots
+
+![Web UI Dashboard](docs/screenshot-webui.png)
+
+*Live dashboard with sparkline charts, pipeline visualizer, and real-time incident feed*
+
+![SigNoz Traces](docs/screenshot-signoz-traces.png)
+
+*Agent self-observability — Prometheus metrics emitted by the agent*
+
+---
+
 ## Demo Scenarios (10 total)
 
 | Scenario | Trigger | Agent Action | Expected Time |
