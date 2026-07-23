@@ -199,7 +199,7 @@ pytest -m "P0" -v                  # Critical tests only
 | Pipeline stages per incident | 6 (untraced) | 6 (fully traced in SigNoz) |
 | LLM diagnosis accuracy | Human-dependent | ~92% (CoT + tool-use + fallback) |
 | Fix success rate | 100% (human verified) | 100% (auto-verified) |
-| Tests | N/A | 57 pass + 1 skip |
+| Tests | N/A | 56 pass + 1 skip |
 | Demo scenarios | N/A | 10 |
 | External dependencies to run | Docker + DB + LLM + SigNoz | Zero (DEMO_MODE=true) |
 
