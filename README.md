@@ -11,7 +11,7 @@
 
 **Track 01 — AI & Agent Observability** | Agents of SigNoz Hackathon 2026
 
-**Team Enthusiast** — Rudra & Het Patel | Dr. Kiran and Pallavi Patel Global University
+**Team Enthusiast** — Rudra Khaire & Het Patel | Dr. Kiran and Pallavi Patel Global University
 
 ## Blog
 
@@ -50,31 +50,31 @@ Agent MedIC is a **self-observing AI SRE agent** that closes the loop:
 
 ```mermaid
 flowchart LR
-    A[SigNoz Alert] --> B[/webhook]
-    B --> C[Dedup]
-    C --> D[Rate-Limit]
-    D --> E[Correlator]
-    E --> F[Queue]
-    F --> G[Worker Pool]
+    A["SigNoz Alert"] --> B["Webhook"]
+    B --> C["Dedup"]
+    C --> D["Rate-Limit"]
+    D --> E["Correlator"]
+    E --> F["Queue"]
+    F --> G["Worker Pool"]
 
-    G --> H1[MCP Query]
-    G --> H2[LLM Diagnosis]
-    G --> H3[Fix Execute]
-    G --> H4[Verify]
+    G --> H1["MCP Query"]
+    G --> H2["LLM Diagnosis"]
+    G --> H3["Fix Execute"]
+    G --> H4["Verify"]
 
-    H1 --> I[Traces<br/>Metrics<br/>Logs]
+    H1 --> I["Traces<br/>Metrics<br/>Logs"]
     I --> H2
     H2 --> H3
     H3 --> H4
 
-    H4 --> J[Log]
-    J --> K[(PostgreSQL)]
-    J --> L[SigNoz OTLP]
-    J --> M[WebSocket]
-    J --> N[Slack]
+    H4 --> J["Log"]
+    J --> K[("PostgreSQL")]
+    J --> L["SigNoz OTLP"]
+    J --> M["WebSocket"]
+    J --> N["Slack"]
 
     subgraph Self-Observability
-        G -.-> O[OTel Spans]
+        G -.-> O["OTel Spans"]
         O -.-> L
     end
 ```
@@ -178,7 +178,7 @@ pytest -m "P0" -v                  # Critical tests only
 
 | Member | Role |
 |---|---|
-| **Rudra** | Lead — Agent Core, MCP Integration, Pipeline, OTel Instrumentation |
+| **Rudra Khaire** | Lead — Agent Core, MCP Integration, Pipeline, OTel Instrumentation |
 | **Het Patel** | Developer — OTel Instrumentation, LLM Engine, Web UI |
 
 **College:** Dr. Kiran and Pallavi Patel Global University

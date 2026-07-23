@@ -2,7 +2,7 @@
 
 ## Overview
 Self-healing AI SRE Agent for SigNoz Hackathon Track 01 (AI & Agent Observability).
-Team Enthusiast — Rudra (lead) + Het Patel. Dr. Kiran and Pallavi Patel Global University.
+Team Enthusiast — Rudra Khaire (lead) + Het Patel. Dr. Kiran and Pallavi Patel Global University.
 
 ## Stack
 - **Backend:** Python FastAPI + LangGraph + SQLAlchemy (PostgreSQL)
