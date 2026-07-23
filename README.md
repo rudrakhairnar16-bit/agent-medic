@@ -13,11 +13,11 @@
 
 **Team Enthusiast** — Rudra & Het Patel | Dr. Kiran and Pallavi Patel Global University
 
-## Demo Video
+## Blog
 
-[![Agent MedIC Demo](https://img.shields.io/badge/Watch-Demo%20Video-red?logo=youtube)](https://your-video-url-here.com)
+[![Blog](https://img.shields.io/badge/Read-Blog%20Post-blue?logo=hashnode)](https://contextos-second-brain-for-developer.hashnode.dev/agent-medic-4-things-signoz-showed-us-about-our-self-healing-ai-agent-that-we-never-expected)
 
-See the full loop: alert triggers → agent traces itself in SigNoz → diagnoses via LLM → applies fix → verifies → logs back to SigNoz. All in under 60 seconds.
+4 things SigNoz showed us about our self-healing AI agent that we never expected — bottlenecks, duplicate MCP queries, invisible bugs, and rate-limiting blind spots.
 
 ---
 
