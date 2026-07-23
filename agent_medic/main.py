@@ -1,7 +1,9 @@
 import asyncio, logging, sys, os
+from contextlib import asynccontextmanager
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from api.routes import router
 
@@ -15,7 +17,22 @@ fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL), format=fmt)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Agent MedIC", version="3.1.0", description="Self-Healing AI SRE Agent")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    if config.OTEL_ENABLED and not config.DEMO_MODE:
+        try:
+            from otel import init_otel
+            init_otel(); logger.info("OTel initialized")
+        except Exception as e: logger.warning(f"OTel skipped: {e}")
+    asyncio.create_task(pipeline_worker.start())
+    logger.info(f"v3.1.0 {'DEMO' if config.DEMO_MODE else 'PRODUCTION'} — {config.AGENT_WORKERS} workers, {config.OLLAMA_MODEL}")
+    yield
+    await pipeline_worker.stop()
+    logger.info("Stopped")
+
+app = FastAPI(title="Agent MedIC", version="3.1.0", description="Self-Healing AI SRE Agent", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.include_router(alert_router)
 app.include_router(router)
 
@@ -33,22 +50,6 @@ async def webhook_rate_limit(request: Request, call_next):
         if not check_webhook_rate(ip):
             return JSONResponse({"status": "rate_limited", "error": "Too many requests"}, 429)
     return await call_next(request)
-
-@app.on_event("startup")
-async def startup():
-    init_db()
-    if config.OTEL_ENABLED and not config.DEMO_MODE:
-        try:
-            from otel import init_otel
-            init_otel(); logger.info("OTel initialized")
-        except Exception as e: logger.warning(f"OTel skipped: {e}")
-    asyncio.create_task(pipeline_worker.start())
-    logger.info(f"v3.1.0 {'DEMO' if config.DEMO_MODE else 'PRODUCTION'} — {config.AGENT_WORKERS} workers, {config.OLLAMA_MODEL}")
-
-@app.on_event("shutdown")
-async def shutdown():
-    await pipeline_worker.stop()
-    logger.info("Stopped")
 
 if __name__ == "__main__":
     import uvicorn
