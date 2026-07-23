@@ -76,10 +76,6 @@ flowchart LR
 
 ## Screenshots
 
-![Dashboard Overview](docs/1.png)
-
-![Agent Pipeline](docs/2.png)
-
 ![Live Incident Feed](docs/3.png)
 
 ---
