@@ -74,6 +74,18 @@ flowchart LR
 
 ---
 
+## Screenshots
+
+![Dashboard Overview](docs/screenshot-dashboard-1.png)
+
+*Web UI dashboard with stats cards, pipeline visualizer, and live incident feed*
+
+![Dashboard Incidents](docs/screenshot-dashboard-2.png)
+
+*Incidents page showing resolved scenarios with root cause and fix action*
+
+---
+
 ## Demo Scenarios (10 total)
 
 | Scenario | Trigger | Agent Action | Expected Time |
